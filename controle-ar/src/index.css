@@ -1,0 +1,45 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* --- RESET MANUAL DE SEGURANÇA (Nuclear) --- */
+/* Isso garante que margens sumam mesmo se o Tailwind não carregar */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+/* --- CONFIGURAÇÃO GLOBAL --- */
+:root, html, body {
+  margin: 0 !important; /* Força bruta para remover a listra */
+  padding: 0 !important;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden; /* Evita rolagem na página inteira */
+  background-color: #f8fafc;
+  -webkit-font-smoothing: antialiased;
+}
+
+#root {
+  width: 100%;
+  height: 100%;
+  display: flex; /* Garante que o layout ocupe tudo */
+  flex-direction: column;
+}
+
+/* Scrollbar Bonita */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
