@@ -8,7 +8,7 @@ export const deviceService = {
       return await response.json();
     } catch (error) {
       console.warn("API Offline, usando modo offline.");
-      return null; // Retorna null para indicar erro
+      return null; 
     }
   },
 
@@ -49,5 +49,28 @@ export const deviceService = {
       } catch (error) {
           throw error;
       }
+  },
+
+  // --- A FUNÇÃO QUE FALTAVA ---
+  sendCommand: async (id, command) => {
+    try {
+      // Usando o ID numérico na URL conforme padrão REST do Django
+      const response = await fetch(`${API_BASE_URL}/devices/${id}/control/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(command),
+      });
+      
+      if (!response.ok) {
+        // Tenta ler o erro do servidor se houver
+        const errorData = await response.text();
+        throw new Error(`Erro do Servidor: ${errorData}`);
+      }
+      
+      return await response.json();
+    } catch (error) {
+      console.error("Erro no sendCommand:", error);
+      throw error;
+    }
   }
 };

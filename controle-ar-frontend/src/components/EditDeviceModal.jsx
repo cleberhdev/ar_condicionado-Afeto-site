@@ -1,15 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { X, Wifi, Lock, Eye, EyeOff, Save } from 'lucide-react';
-import SaveConfirmationModal from './SaveConfirmationModal'; // <--- Importado
+import SaveConfirmationModal from './SaveConfirmationModal';
 
 const BRANDS = ["Midea", "Carrier", "Samsung", "LG", "Consul", "Daikin"];
 
 const EditDeviceModal = ({ isOpen, onClose, device, onSave }) => {
   const [formData, setFormData] = useState({
+    id: '', // Importante manter o ID para a atualização
     name: '',
     room: '',
     brand: '',
-    wifiSsid: '',
+    wifiSsid: '', // O backend pode enviar wifi_ssid, vamos tratar isso
     wifiPassword: ''
   });
 
@@ -23,10 +24,15 @@ const EditDeviceModal = ({ isOpen, onClose, device, onSave }) => {
     if (device) {
       const isStandard = BRANDS.includes(device.brand);
       setFormData({
-        ...device,
-        wifiPassword: device.wifiPassword || ''
+        id: device.id, // Garante que o ID numérico esteja presente
+        name: device.name || '',
+        room: device.room || '',
+        brand: device.brand || '',
+        // Tenta pegar wifiSsid (frontend antigo) ou wifi_ssid (backend)
+        wifiSsid: device.wifiSsid || device.wifi_ssid || '',
+        wifiPassword: '' // Senha vem vazia por segurança
       });
-      setIsCustomBrand(!isStandard);
+      setIsCustomBrand(!isStandard && !!device.brand);
     }
   }, [device]);
 
@@ -54,7 +60,10 @@ const EditDeviceModal = ({ isOpen, onClose, device, onSave }) => {
 
   // 2. Se confirmar, executa o salvamento real
   const handleConfirmSave = () => {
-    onSave(formData);
+    // Chama a função onEdit (passada como onSave) do pai
+    if (onSave) {
+        onSave(formData);
+    }
     setShowConfirm(false);
     onClose();
   };
@@ -176,7 +185,7 @@ const EditDeviceModal = ({ isOpen, onClose, device, onSave }) => {
                         name="wifiPassword"
                         value={formData.wifiPassword}
                         onChange={handleChange}
-                        placeholder="••••••••"
+                        placeholder="Nova senha (opcional)"
                         className="w-full pl-9 pr-10 px-3 py-2 rounded-lg border border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10 outline-none bg-white"
                       />
                       <button

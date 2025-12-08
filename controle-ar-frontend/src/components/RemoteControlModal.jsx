@@ -26,17 +26,17 @@ const RemoteControlModal = ({ isOpen, onClose, device }) => {
       power: newPower,
       temp: newTemp,
       mode: newMode,
-      brand: device.brand || "Carrier" // Marca é essencial para a ESP32
+      brand: device.brand || "Carrier" 
     };
 
-    console.log("Enviando comando para:", device.device_id, payload);
+    console.log("Enviando comando para:", device.id, payload); // Log para conferir o ID numérico
 
     try {
-      // Chama a API que manda para o Django -> MQTT -> ESP32
-      await deviceService.sendCommand(device.device_id || device.id, payload);
+      // CORREÇÃO: Usar device.id (número do banco) para a URL da API
+      // O Django vai receber esse ID, buscar no banco e pegar o device_id correto para o MQTT
+      await deviceService.sendCommand(device.id, payload); 
     } catch (error) {
       console.error("Erro ao enviar comando:", error);
-      // Opcional: Mostrar toast de erro
     }
   };
 
