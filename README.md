@@ -1,4 +1,3 @@
-````markdown
 # ❄️ Controle de Ar-Condicionado IoT (React + Django + ESP32)
 
 Sistema completo para automação de ar-condicionados utilizando **ESP32**, **React**, **Django** e **MQTT**.  
@@ -193,5 +192,3 @@ Substitua pelo **device_id** criado no Django (visível no admin ou editando o d
 npm install -D tailwindcss@3.4.17 postcss autoprefixer
 npm run dev
 ```
-
----
