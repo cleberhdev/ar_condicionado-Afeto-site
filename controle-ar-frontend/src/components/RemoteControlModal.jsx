@@ -1,38 +1,73 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  X, 
-  Power, 
-  Snowflake, 
-  Sun, 
-  Wind, 
-  Droplets, 
-  Zap, 
-  ThermometerSun,
-  Minus,
-  Plus
-} from 'lucide-react';
+import { X, Power, Snowflake, Sun, Wind, Droplets, Zap, Minus, Plus } from 'lucide-react';
+import { deviceService } from '../services/api'; // <--- Importando API
 
-const RemoteControlModal = ({ isOpen, onClose, deviceName = "Ar Condicionado" }) => {
-  // --- ESTADOS DO CONTROLE ---
-  const [power, setPower] = useState(false); // Começa desligado por padrão no modal
-  const [temp, setTemp] = useState(24);
-  const [mode, setMode] = useState('cool');
+const RemoteControlModal = ({ isOpen, onClose, device }) => {
+  // Inicializa com os dados do dispositivo ou padrões
+  const [power, setPower] = useState(device?.power || false);
+  const [temp, setTemp] = useState(device?.temperature || 24);
+  const [mode, setMode] = useState(device?.mode || 'cool');
 
-  // Constantes
   const MIN_TEMP = 16;
   const MAX_TEMP = 30;
 
-  // Cálculos para o Arco SVG (Igual ao MasterControlCard)
+  // Atualiza estados se o dispositivo mudar
+  useEffect(() => {
+    if (device) {
+      setPower(device.power);
+      setTemp(device.temperature);
+      setMode(device.mode);
+    }
+  }, [device]);
+
+  // --- FUNÇÃO CENTRAL DE ENVIO ---
+  const sendCommand = async (newPower, newTemp, newMode) => {
+    const payload = {
+      power: newPower,
+      temp: newTemp,
+      mode: newMode,
+      brand: device.brand || "Carrier" // Marca é essencial para a ESP32
+    };
+
+    console.log("Enviando comando para:", device.device_id, payload);
+
+    try {
+      // Chama a API que manda para o Django -> MQTT -> ESP32
+      await deviceService.sendCommand(device.device_id || device.id, payload);
+    } catch (error) {
+      console.error("Erro ao enviar comando:", error);
+      // Opcional: Mostrar toast de erro
+    }
+  };
+
+  const handlePower = () => {
+    const newState = !power;
+    setPower(newState);
+    sendCommand(newState, temp, mode);
+  };
+
+  const handleTempChange = (increment) => {
+    if (!power) return;
+    const newTemp = Math.min(Math.max(temp + increment, MIN_TEMP), MAX_TEMP);
+    setTemp(newTemp);
+    sendCommand(power, newTemp, mode);
+  };
+
+  const handleModeChange = (newMode) => {
+    if (!power) return;
+    setMode(newMode);
+    sendCommand(power, temp, newMode);
+  };
+
+  // --- VISUAL (Mantido igual) ---
   const radius = 100;
   const circumference = 2 * Math.PI * radius;
   const percentage = (temp - MIN_TEMP) / (MAX_TEMP - MIN_TEMP);
   const strokeDashoffset = circumference - (percentage * circumference) * 0.65; 
   const baseOffset = circumference * 0.35;
 
-  // Lógica de Cores Dinâmica
   const getModalBackground = () => {
-    if (!power) return 'bg-gray-900'; // Escuro quando desligado
-
+    if (!power) return 'bg-gray-900';
     switch (mode) {
       case 'cool': return 'bg-gradient-to-br from-blue-600 to-indigo-700';
       case 'heat': return 'bg-gradient-to-br from-orange-500 to-red-600';
@@ -42,72 +77,47 @@ const RemoteControlModal = ({ isOpen, onClose, deviceName = "Ar Condicionado" })
     }
   };
 
-  const handleTempChange = (increment) => {
-    if (!power) return;
-    setTemp(prev => {
-      const newValue = prev + increment;
-      return Math.min(Math.max(newValue, MIN_TEMP), MAX_TEMP);
-    });
-  };
-
-  const handlePower = () => {
-    setPower(!power);
-    console.log(`Comando Individual: POWER ${!power ? 'ON' : 'OFF'} para ${deviceName}`);
-  };
-
-  if (!isOpen) return null;
+  if (!isOpen || !device) return null;
 
   return (
     <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center backdrop-blur-sm p-4 animate-fade-in">
       
-      {/* Container do Modal (Estilo Card Mestre) */}
       <div className={`w-full max-w-lg ${getModalBackground()} rounded-3xl shadow-2xl overflow-hidden relative transition-all duration-500 ease-in-out flex flex-col`}>
         
-        {/* Elementos Decorativos de Fundo */}
+        {/* Background Effects */}
         <div className="absolute top-[-50px] left-[-50px] w-40 h-40 bg-white/10 rounded-full blur-3xl pointer-events-none"></div>
         <div className="absolute bottom-[-50px] right-[-50px] w-60 h-60 bg-white/10 rounded-full blur-3xl pointer-events-none"></div>
 
-        {/* --- CABEÇALHO DO MODAL --- */}
+        {/* Header */}
         <div className="flex justify-between items-start p-6 relative z-10">
           <div>
             <div className="flex items-center gap-2 mb-1 text-white/80">
               <Zap size={18} />
               <span className="text-xs font-bold tracking-wider uppercase">Controle Remoto</span>
             </div>
-            <h2 className="text-2xl font-bold text-white leading-tight">{deviceName}</h2>
+            <h2 className="text-2xl font-bold text-white leading-tight">{device.name}</h2>
             <p className="text-white/70 text-xs mt-1">
               {power ? 'Conectado e Operando' : 'Dispositivo Desligado'}
             </p>
           </div>
           
-          <button 
-            onClick={onClose} 
-            className="p-2 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors backdrop-blur-md"
-          >
+          <button onClick={onClose} className="p-2 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors backdrop-blur-md">
             <X size={20} />
           </button>
         </div>
 
-        {/* --- CORPO PRINCIPAL (DIAL + BOTÕES) --- */}
+        {/* Body */}
         <div className="flex-1 flex flex-col items-center justify-center p-6 relative z-10">
           
-          {/* O DIAL CIRCULAR */}
+          {/* Dial */}
           <div className="relative w-64 h-64 flex items-center justify-center mb-8">
             <svg className="w-full h-full transform rotate-[150deg]" viewBox="0 0 240 240">
-              {/* Trilha de Fundo */}
               <circle cx="120" cy="120" r={radius} fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="18" strokeLinecap="round" strokeDasharray={circumference} strokeDashoffset={baseOffset} />
-              
-              {/* Trilha de Progresso (Só aparece se ligado) */}
               {power && (
-                <circle
-                  cx="120" cy="120" r={radius} fill="none" stroke="white" strokeWidth="18" strokeLinecap="round"
-                  strokeDasharray={circumference} strokeDashoffset={strokeDashoffset + baseOffset}
-                  className="transition-all duration-700 ease-out drop-shadow-[0_0_10px_rgba(255,255,255,0.5)]"
-                />
+                <circle cx="120" cy="120" r={radius} fill="none" stroke="white" strokeWidth="18" strokeLinecap="round" strokeDasharray={circumference} strokeDashoffset={strokeDashoffset + baseOffset} className="transition-all duration-700 ease-out drop-shadow-[0_0_10px_rgba(255,255,255,0.5)]" />
               )}
             </svg>
 
-            {/* Conteúdo Central */}
             <div className="absolute inset-0 flex flex-col items-center justify-center mb-4 text-white">
               {power ? (
                 <>
@@ -124,38 +134,14 @@ const RemoteControlModal = ({ isOpen, onClose, deviceName = "Ar Condicionado" })
               )}
             </div>
 
-            {/* Botões +/- (Só funcionam se ligado) */}
-            <button 
-              onClick={() => handleTempChange(-1)} 
-              disabled={!power}
-              className={`absolute bottom-4 left-4 p-3 rounded-full transition backdrop-blur-md border active:scale-95
-                ${power ? 'bg-white/10 hover:bg-white/20 border-white/10 text-white' : 'bg-white/5 border-white/5 text-white/20 cursor-not-allowed'}`}
-            >
-              <Minus size={24} />
-            </button>
-            <button 
-              onClick={() => handleTempChange(1)} 
-              disabled={!power}
-              className={`absolute bottom-4 right-4 p-3 rounded-full transition backdrop-blur-md border active:scale-95
-                ${power ? 'bg-white/10 hover:bg-white/20 border-white/10 text-white' : 'bg-white/5 border-white/5 text-white/20 cursor-not-allowed'}`}
-            >
-              <Plus size={24} />
-            </button>
+            <button onClick={() => handleTempChange(-1)} disabled={!power} className={`absolute bottom-4 left-4 p-3 rounded-full transition backdrop-blur-md border active:scale-95 ${power ? 'bg-white/10 hover:bg-white/20 border-white/10 text-white' : 'bg-white/5 border-white/5 text-white/20 cursor-not-allowed'}`}><Minus size={24} /></button>
+            <button onClick={() => handleTempChange(1)} disabled={!power} className={`absolute bottom-4 right-4 p-3 rounded-full transition backdrop-blur-md border active:scale-95 ${power ? 'bg-white/10 hover:bg-white/20 border-white/10 text-white' : 'bg-white/5 border-white/5 text-white/20 cursor-not-allowed'}`}><Plus size={24} /></button>
           </div>
 
-          {/* Botão Power Centralizado */}
-          <button
-            onClick={handlePower}
-            className={`w-16 h-16 rounded-full flex items-center justify-center shadow-xl border-4 transition-all duration-300 hover:scale-110 active:scale-95 mb-8
-              ${power 
-                ? 'bg-white border-white/20 text-gray-900 shadow-[0_0_30px_rgba(255,255,255,0.4)]' 
-                : 'bg-red-500 border-red-400 text-white shadow-lg'}
-            `}
-          >
+          <button onClick={handlePower} className={`w-16 h-16 rounded-full flex items-center justify-center shadow-xl border-4 transition-all duration-300 hover:scale-110 active:scale-95 mb-8 ${power ? 'bg-white border-white/20 text-gray-900 shadow-[0_0_30px_rgba(255,255,255,0.4)]' : 'bg-red-500 border-red-400 text-white shadow-lg'}`}>
             <Power size={32} strokeWidth={3} />
           </button>
 
-          {/* Seletor de Modos */}
           <div className="grid grid-cols-4 gap-3 w-full">
             {[
               { id: 'cool', label: 'Frio', icon: Snowflake },
@@ -165,14 +151,9 @@ const RemoteControlModal = ({ isOpen, onClose, deviceName = "Ar Condicionado" })
             ].map((m) => (
               <button
                 key={m.id}
-                onClick={() => power && setMode(m.id)}
+                onClick={() => handleModeChange(m.id)}
                 disabled={!power}
-                className={`flex flex-col items-center justify-center p-3 rounded-xl transition-all duration-200 border
-                  ${mode === m.id && power 
-                    ? 'bg-white text-gray-900 shadow-lg scale-105 border-white font-bold' 
-                    : 'bg-white/5 text-white/60 border-white/5 hover:bg-white/10'}
-                  ${!power && 'opacity-30 cursor-not-allowed'}
-                `}
+                className={`flex flex-col items-center justify-center p-3 rounded-xl transition-all duration-200 border ${mode === m.id && power ? 'bg-white text-gray-900 shadow-lg scale-105 border-white font-bold' : 'bg-white/5 text-white/60 border-white/5 hover:bg-white/10'} ${!power && 'opacity-30 cursor-not-allowed'}`}
               >
                 <m.icon size={20} className="mb-1" />
                 <span className="text-[10px] uppercase">{m.label}</span>
