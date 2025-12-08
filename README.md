@@ -1,168 +1,197 @@
-Controle de Ar-Condicionado IoT (React + Django + ESP32)
+````markdown
+# ❄️ Controle de Ar-Condicionado IoT (React + Django + ESP32)
 
-Este projeto é um sistema completo para automação de ar-condicionados utilizando ESP32, React e Django. Ele permite controlar dispositivos de marcas como Samsung, LG, Fujitsu, Springer Midea e Carrier via interface web.
+Sistema completo para automação de ar-condicionados utilizando **ESP32**, **React**, **Django** e **MQTT**.  
+Permite controlar dispositivos de marcas como **Samsung, LG, Fujitsu, Springer Midea e Carrier** via interface web.
 
-🚀 Arquitetura do Sistema
+---
 
-O sistema funciona da seguinte forma:
+## 🚀 Arquitetura do Sistema
 
-Frontend (React): O usuário interage com a interface para ligar/desligar, mudar temperatura ou modo.
+O fluxo do sistema funciona da seguinte forma:
 
-API (Django): O frontend envia uma requisição HTTP para o backend.
+1. **Frontend (React):**  
+   O usuário interage com a interface para ligar/desligar, ajustar temperatura e modos.
 
-MQTT (Broker): O backend publica uma mensagem JSON em um tópico MQTT específico para o dispositivo.
+2. **API (Django):**  
+   O frontend envia uma requisição HTTP para o backend.
 
-ESP32: A placa, conectada ao Wi-Fi e inscrita no tópico, recebe a mensagem e emite o sinal IR correspondente.
+3. **MQTT Broker:**  
+   O backend publica uma mensagem JSON em um tópico MQTT específico do dispositivo.
 
-Feedback: A ESP32 publica seu novo estado em um tópico de resposta, que é lido pelo backend para atualizar a interface em tempo real.
+4. **ESP32:**  
+   Conectada ao Wi-Fi, inscrita no tópico, recebe o comando e emite o sinal IR correspondente.
 
-📂 Estrutura do Projeto
+5. **Feedback:**  
+   A ESP32 envia seu novo estado para um tópico de resposta.  
+   O backend lê e atualiza a interface em tempo real.
 
-1. Backend (controle-ar-backend/)
+---
 
-Tecnologias: Python, Django, Django REST Framework, Paho-MQTT.
+## 📂 Estrutura do Projeto
 
-Função: Gerenciar dispositivos, usuários e comunicação MQTT.
+### 1. **Backend – `controle-ar-backend/`**
+**Tecnologias:** Python, Django, Django REST Framework, Paho-MQTT  
+**Função:** Gerenciar dispositivos, usuários e comunicação via MQTT.
 
-Principais Arquivos:
+**Principais arquivos:**
+- `core/models.py` – Modelo Device (nome, id, marca, status).  
+- `core/views.py` – Recebe comandos do frontend e envia via MQTT.  
+- `core/mqtt_helper.py` – Função utilitária para publicar no broker.  
+- `mqtt_listener.py` – Escuta atualizações da ESP32 em tempo real.
 
-core/models.py: Define a tabela Device (nome, id, marca, status).
+---
 
-core/views.py: Recebe comandos da API e chama o MQTT.
+### 2. **Frontend – `controle-ar-frontend/` ou `src/`**
+**Tecnologias:** React, Vite, Tailwind CSS, Lucide Icons  
+**Função:** Interface amigável para o controle dos dispositivos.
 
-core/mqtt_helper.py: Função para enviar mensagens ao broker.
+**Principais arquivos:**
+- `src/services/api.js` – Comunicação com o backend Django.  
+- `src/pages/Devices.jsx` – Cadastro e listagem de dispositivos.  
+- `src/components/RemoteControlModal.jsx` – Controle visual estilo aplicativo.
 
-mqtt_listener.py: Script que roda em paralelo para ouvir o status das placas.
+---
 
-2. Frontend (controle-ar-frontend/ ou src/)
+### 3. **Hardware – ESP32**
+**Tecnologias:** Arduino IDE / PlatformIO, C++  
+**Bibliotecas:** WiFiManager, PubSubClient, ArduinoJson, IRremoteESP8266  
 
-Tecnologias: React, Vite, Tailwind CSS, Lucide Icons.
+**Função:** Receber comandos via MQTT e emitir sinais IR.
 
-Função: Interface amigável para o usuário.
+---
 
-Principais Arquivos:
+## 🛠️ Como Rodar o Projeto (Passo a Passo)
 
-src/services/api.js: Comunicação com o backend Django.
+É necessário rodar **3 terminais simultaneamente** (Backend, Listener e Frontend) + a ESP32.
 
-src/pages/Devices.jsx: Lista e cadastro de dispositivos.
+### ✔️ Pré-requisitos
 
-src/components/RemoteControlModal.jsx: Controle visual estilo app.
+- Python instalado  
+- Node.js instalado  
+- Broker MQTT (ex.: público: *broker.hivemq.com*)
 
-3. Hardware (ESP32)
+---
 
-Tecnologias: Arduino IDE/PlatformIO, C++.
+## 📌 Passo 1: Iniciar o Backend (Django)
 
-Bibliotecas: WiFiManager, PubSubClient, ArduinoJson, IRremoteESP8266.
+```bash
+cd controle-ar-backend
+````
 
-Função: Receber comandos MQTT e disparar IR.
+### Criar ambiente virtual (opcional)
 
-🛠️ Como Rodar o Projeto (Passo a Passo)
-
-Para o sistema funcionar, você precisa de 3 terminais rodando simultaneamente (Backend, Listener e Frontend) e a ESP32 ligada.
-
-Pré-requisitos
-
-Python instalado.
-
-Node.js instalado.
-
-Broker MQTT (usamos broker.hivemq.com público para testes).
-
-Passo 1: Iniciar o Backend (Django)
-
-Abra um terminal na pasta do backend (controle-ar-backend).
-
-Crie e ative um ambiente virtual (opcional, mas recomendado):
-
+```bash
 python -m venv venv
-# Windows: venv\Scripts\activate
-# Linux/Mac: source venv/bin/activate
+# Windows:
+venv\Scripts\activate
+# Linux/Mac:
+source venv/bin/activate
+```
 
+### Instalar dependências
 
-Instale as dependências:
-
+```bash
 pip install django djangorestframework django-cors-headers paho-mqtt
+```
 
+### Preparar banco de dados
 
-Prepare o banco de dados:
-
+```bash
 python manage.py makemigrations
 python manage.py migrate
+```
 
+### Criar superusuário
 
-Crie um superusuário (para acessar /admin):
-
+```bash
 python manage.py createsuperuser
+```
 
+### Rodar o backend
 
-Rode o servidor:
-
+```bash
 python manage.py runserver
+```
 
+Backend disponível em: **[http://localhost:8000](http://localhost:8000)**
 
-O backend estará rodando em: http://localhost:8000
+---
 
-Passo 2: Iniciar o Listener MQTT (Para Status em Tempo Real)
+## 📌 Passo 2: Rodar o Listener MQTT (Status em tempo real)
 
-Abra um segundo terminal na mesma pasta do backend.
+Em outro terminal:
 
-Ative o ambiente virtual (se usou).
+```bash
+cd controle-ar-backend
+```
 
-Rode o script de escuta:
+Ativar ambiente virtual (se usou) e rodar:
 
+```bash
 python mqtt_listener.py
+```
 
+Deve aparecer:
+**"✅ OUVINTE CONECTADO!"**
 
-Ele deve mostrar: "✅ OUVINTE CONECTADO!"
+---
 
-Passo 3: Iniciar o Frontend (React)
+## 📌 Passo 3: Iniciar o Frontend (React)
 
-Abra um terceiro terminal na pasta do frontend (controle-ar).
-
-Instale as dependências (se ainda não fez):
-
+```bash
+cd controle-ar-frontend
 npm install
-
-
-Rode o projeto:
-
 npm run dev
+```
 
+Frontend disponível em: **[http://localhost:5173](http://localhost:5173)**
 
-Acesse o site em: http://localhost:5173
+---
 
-Passo 4: Configurar a ESP32
+## 📌 Passo 4: Configurar a ESP32
 
-Abra o código .ino na Arduino IDE.
+1. Abra o código `.ino` no Arduino IDE.
+2. No trecho:
 
-Importante: Na linha char device_id[50] = "...", coloque o ID exato que foi gerado no Django (ex: esp32_1765...). Você pode ver esse ID na URL ao editar um dispositivo no site ou no Django Admin.
+```cpp
+char device_id[50] = "esp32_XXXX";
+```
 
-Configure o Wi-Fi no código (ou use o WiFiManager se estiver ativo).
+Substitua pelo **device_id** criado no Django (visível no admin ou editando o dispositivo).
+3. Configure o Wi-Fi (ou use WiFiManager).
+4. Carregue o código na placa.
+5. Abra o Serial Monitor (115200) para confirmar a conexão.
 
-Carregue o código na placa.
+---
 
-Abra o Serial Monitor (115200) para confirmar a conexão.
+## 🐛 Solução de Problemas Comuns
 
-🐛 Solução de Problemas Comuns
+### 1. **"Erro ao enviar comando" no site**
 
-1. "Erro ao enviar comando" no Site
+* Backend offline ou erro de CORS.
+  **Solução:** Verifique se o `runserver` está ativo e olhe o console do navegador.
 
-Causa: O Frontend não consegue falar com o Django.
+### 2. **Dispositivo sempre "Offline"**
 
-Solução: Verifique se o Terminal 1 (runserver) está rodando e se não há erros de CORS no console do navegador (F12).
+* Django não recebe feedback via MQTT.
+  **Soluções:**
+* Verifique se o listener está rodando.
+* Confirme se o `device_id` da ESP32 é **idêntico** ao cadastrado.
 
-2. Dispositivo sempre "Offline"
+### 3. **ESP32 não conecta ao Wi-Fi**
 
-Causa: O Django não está recebendo o feedback da placa.
+* Credenciais incorretas ou WiFiManager desconfigurado.
+  **Solução:** Conectar na rede `SmartAC-Config` e reconfigurar.
 
-Solução: Verifique se o Terminal 2 (mqtt_listener.py) está rodando. Verifique se o device_id no código da ESP32 é idêntico ao cadastrado no site.
+### 4. **Frontend bagunçado**
 
-3. Placa não conecta no Wi-Fi
+* Problema com TailwindCSS.
+  **Solução:**
 
-Solução: Se estiver usando código com credenciais fixas, verifique a senha. Se usar WiFiManager, conecte na rede SmartAC-Config e configure novamente.
+```bash
+npm install -D tailwindcss@3.4.17 postcss autoprefixer
+npm run dev
+```
 
-4. Interface "feia" ou desconfigurada
-
-Causa: Problema com Tailwind CSS (versão incompatível).
-
-Solução: Pare o frontend, rode npm install -D tailwindcss@3.4.17 postcss autoprefixer e reinicie com npm run dev.
+---
