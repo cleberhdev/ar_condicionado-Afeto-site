@@ -1,113 +1,187 @@
+// Devices.jsx - ADICIONAR NOVA FUNCIONALIDADE
 import React, { useState, useEffect } from 'react';
 import DeviceTable from '../components/DeviceTable';
 import CreateDeviceModal from '../components/CreateDeviceModal';
-import { Plus, Loader2 } from 'lucide-react';
-// Importa o serviço que conecta com o Django
+import { Plus, Loader2, Wifi, RefreshCw } from 'lucide-react';
 import { deviceService } from '../services/api';
 
 export default function Devices() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [devices, setDevices] = useState([]);
+  const [unregisteredDevices, setUnregisteredDevices] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [showUnregistered, setShowUnregistered] = useState(false);
 
-  // Carregar dados reais ao abrir a página
   useEffect(() => {
     loadDevices();
+    // Verificar dispositivos não cadastrados a cada 10 segundos
+    const interval = setInterval(() => {
+      checkUnregisteredDevices();
+    }, 10000);
+    return () => clearInterval(interval);
   }, []);
 
   const loadDevices = async () => {
     setIsLoading(true);
     try {
-      // Busca a lista do backend
       const data = await deviceService.getAll();
-      setDevices(data || []);
+      const registered = data.filter(d => d.is_registered !== false);
+      const unregistered = data.filter(d => d.is_registered === false && d.is_online);
+      
+      setDevices(registered || []);
+      setUnregisteredDevices(unregistered || []);
     } catch (error) {
       console.error("Erro ao carregar:", error);
-      // Se der erro (backend offline), você pode optar por mostrar lista vazia ou mock
-      // setDevices([]); 
     } finally {
       setIsLoading(false);
     }
   };
 
-  const openModal = () => setIsModalOpen(true);
-  const closeModal = () => setIsModalOpen(false);
+  const checkUnregisteredDevices = async () => {
+    try {
+      const data = await deviceService.getAll();
+      const unregistered = data.filter(d => d.is_registered === false && d.is_online);
+      setUnregisteredDevices(unregistered);
+    } catch (error) {
+      console.error("Erro ao verificar dispositivos:", error);
+    }
+  };
 
-  // --- FUNÇÃO DE CADASTRO REAL ---
+  const handleRegisterDevice = async (device) => {
+    // Abrir modal de edição com os dados do dispositivo
+    setIsModalOpen(true);
+    // Pré-preencher o modal com os dados do dispositivo
+    // Você precisará adaptar o CreateDeviceModal para aceitar dados pré-preenchidos
+  };
+
   const handleAddDevice = async (formData) => {
-    // 1. Prepara o objeto para enviar ao Django (snake_case)
+    // Buscar device_id de um dispositivo não cadastrado se disponível
+    let selectedDeviceId = formData.device_id;
+    
+    if (!selectedDeviceId && unregisteredDevices.length > 0) {
+      // Pode-se implementar um seletor de dispositivos disponíveis
+      selectedDeviceId = unregisteredDevices[0].device_id;
+    }
+    
     const payload = {
       name: formData.name,
       room: formData.room,
       brand: formData.brand,
-      wifi_ssid: formData.wifiSsid, // Frontend usa wifiSsid -> Backend usa wifi_ssid
-      // device_id: Se o backend não gerar, gere aqui. Se gerar, remova.
-      device_id: `esp32_${Date.now()}` 
+      wifi_ssid: formData.wifiSsid,
+      device_id: selectedDeviceId || `esp32_${Date.now()}`,
+      is_registered: true  // Marcar como cadastrado
     };
 
     try {
-      // 2. Envia para a API
       const newDevice = await deviceService.create(payload);
-      
-      // 3. Se sucesso, atualiza a lista na tela
-      setDevices((prev) => [...prev, newDevice]);
+      setDevices(prev => [...prev, newDevice]);
+      setUnregisteredDevices(prev => prev.filter(d => d.device_id !== newDevice.device_id));
       alert("Dispositivo cadastrado com sucesso!");
-      
     } catch (error) {
       console.error("Erro ao cadastrar:", error);
-      alert("Erro ao cadastrar. Verifique se o Backend está rodando.");
+      alert("Erro ao cadastrar.");
     }
     
-    closeModal();
-  };
-
-  // --- FUNÇÃO DE EXCLUIR REAL ---
-  const handleDeleteDevice = async (id) => {
-    if (window.confirm("Tem certeza que deseja excluir?")) {
-      try {
-        await deviceService.delete(id);
-        // Remove da lista visualmente
-        setDevices((prev) => prev.filter((d) => d.id !== id && d.device_id !== id));
-      } catch (error) {
-        alert("Erro ao excluir.");
-      }
-    }
+    setIsModalOpen(false);
   };
 
   return (
-    <div className="space-y-6 relative z-10">
-      
+    <div className="space-y-6">
+      {/* Cabeçalho */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
         <div>
           <h2 className="text-2xl font-bold text-gray-900">Gerenciar Dispositivos</h2>
-          <p className="text-gray-500 mt-1">Adicione e configure suas placas ESP32.</p>
+          <p className="text-gray-500 mt-1">Configure suas placas ESP32 detectadas automaticamente</p>
         </div>
 
-        <button 
-          onClick={openModal}
-          className="bg-blue-600 text-white px-5 py-2.5 rounded-xl font-bold shadow-lg shadow-blue-500/30 hover:bg-blue-700 hover:shadow-blue-600/40 transition-all flex items-center gap-2 active:scale-95"
-        >
-          <Plus size={20} strokeWidth={2.5} />
-          <span>Novo Dispositivo</span>
-        </button>
+        <div className="flex gap-3">
+          <button 
+            onClick={loadDevices}
+            className="px-4 py-2.5 rounded-xl bg-gray-100 text-gray-700 hover:bg-gray-200 transition flex items-center gap-2"
+          >
+            <RefreshCw size={18} />
+            Atualizar
+          </button>
+          
+          <button 
+            onClick={() => setIsModalOpen(true)}
+            className="bg-blue-600 text-white px-5 py-2.5 rounded-xl font-bold shadow-lg hover:bg-blue-700 transition flex items-center gap-2"
+          >
+            <Plus size={20} />
+            Cadastrar Dispositivo
+          </button>
+        </div>
       </div>
 
+      {/* Seção de dispositivos não cadastrados */}
+      {unregisteredDevices.length > 0 && (
+        <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-5 mb-6">
+          <div className="flex items-center gap-3 mb-4">
+            <Wifi className="text-yellow-600" size={24} />
+            <h3 className="text-lg font-bold text-yellow-800">
+              Dispositivos Detectados ({unregisteredDevices.length})
+            </h3>
+          </div>
+          
+          <p className="text-yellow-700 mb-4">
+            Foram detectadas placas ESP32 conectadas à rede. Clique em "Cadastrar" para configurá-las.
+          </p>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {unregisteredDevices.map(device => (
+              <div key={device.device_id} className="bg-white rounded-lg p-4 border border-yellow-300">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <h4 className="font-bold text-gray-900">{device.name || "ESP32 Desconhecido"}</h4>
+                    <p className="text-sm text-gray-600">ID: {device.device_id}</p>
+                    <p className="text-sm text-gray-600">Marca: {device.brand || "Não definida"}</p>
+                    <div className="flex items-center gap-2 mt-2">
+                      <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                      <span className="text-xs text-green-600">Online</span>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => handleRegisterDevice(device)}
+                    className="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700"
+                  >
+                    Cadastrar
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Lista de dispositivos cadastrados */}
       {isLoading ? (
         <div className="flex justify-center p-10">
           <Loader2 className="animate-spin text-blue-600" size={40} />
         </div>
+      ) : devices.length > 0 ? (
+        <DeviceTable data={devices} />
       ) : (
-        <DeviceTable 
-            data={devices} 
-            onDelete={handleDeleteDevice} // Passa a função de deletar para a tabela
-        />
+        <div className="text-center py-12 bg-gray-50 rounded-xl">
+          <Wifi size={48} className="mx-auto text-gray-400 mb-4" />
+          <h3 className="text-xl font-medium text-gray-900 mb-2">Nenhum dispositivo cadastrado</h3>
+          <p className="text-gray-600 mb-6">
+            Conecte uma placa ESP32 à rede ou cadastre manualmente.
+          </p>
+          <button 
+            onClick={() => setIsModalOpen(true)}
+            className="bg-blue-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-blue-700"
+          >
+            Cadastrar Primeiro Dispositivo
+          </button>
+        </div>
       )}
 
-      {/* O Modal recebe a função handleAddDevice no onSave */}
+      {/* Modal */}
       <CreateDeviceModal 
         isOpen={isModalOpen} 
-        onClose={closeModal} 
+        onClose={() => setIsModalOpen(false)}
         onSave={handleAddDevice}
+        availableDevices={unregisteredDevices}  // Passar dispositivos disponíveis
       />
     </div>
   );

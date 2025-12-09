@@ -54,22 +54,31 @@ export const deviceService = {
   // --- A FUNÇÃO QUE FALTAVA ---
   sendCommand: async (id, command) => {
     try {
-      // Usando o ID numérico na URL conforme padrão REST do Django
+      console.log(`📡 Enviando comando para dispositivo ID: ${id}`);
+      console.log(`📦 Comando:`, command);
+      
       const response = await fetch(`${API_BASE_URL}/devices/${id}/control/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(command),
+        body: JSON.stringify({
+          power: command.power,
+          temperature: command.temp,  // Mapeia 'temp' para 'temperature'
+          mode: command.mode
+        }),
       });
       
       if (!response.ok) {
-        // Tenta ler o erro do servidor se houver
-        const errorData = await response.text();
-        throw new Error(`Erro do Servidor: ${errorData}`);
+        const errorText = await response.text();
+        console.error(`❌ Erro do servidor (${response.status}):`, errorText);
+        throw new Error(`Erro do servidor: ${response.status} - ${errorText}`);
       }
       
-      return await response.json();
+      const data = await response.json();
+      console.log(`✅ Comando enviado com sucesso:`, data);
+      return data;
+      
     } catch (error) {
-      console.error("Erro no sendCommand:", error);
+      console.error("❌ Erro no sendCommand:", error);
       throw error;
     }
   }
