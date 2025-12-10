@@ -1,3 +1,13 @@
+/* Firmware ESP32 — Versão Corrigida (prioritária)
+   Correções:
+   - botão não é GPIO0 (usa 15)
+   - reconexão MQTT não bloqueante
+   - blink LED não-blocking
+   - timestamp em epoch seconds via NTP (com fallback)
+   - publish consolidado com retain=true
+   - LWT configurado
+*/
+
 #include <WiFi.h>
 #include <PubSubClient.h>
 #include <ArduinoJson.h>
@@ -5,18 +15,19 @@
 #include <IRsend.h>
 #include <WiFiManager.h>
 #include <Preferences.h>
+#include <time.h>
 
 // --- BIBLIOTECAS DE MARCAS ---
-#include <ir_Fujitsu.h> 
-#include <ir_Coolix.h>  
-#include <ir_Bosch.h>   
+#include <ir_Fujitsu.h>
+#include <ir_Coolix.h>
+#include <ir_Bosch.h>
 
 // ==========================================
 // CONFIGURAÇÕES HARDWARE
 // ==========================================
 const uint16_t kIrLed = 4;      // GPIO para LED IR
 #define LED_STATUS 2            // LED interno do ESP32
-#define BUTTON_CONFIG 0         // Botão para modo de configuração (GPIO0)
+#define BUTTON_CONFIG 15        // NÃO usar GPIO0; trocar para 15 (ou outro seguro)
 
 // Objetos IR
 IRsend irsend(kIrLed);
@@ -32,9 +43,10 @@ WiFiManager wm;
 // ==========================================
 // VARIÁVEIS GLOBAIS
 // ==========================================
-String device_id;               // Gerado automaticamente
-String mqtt_server = "broker.hivemq.com";
+String device_id;
+const char* mqtt_server = "broker.hivemq.com";
 int mqtt_port = 1883;
+
 bool configMode = false;
 
 // Estado atual
@@ -47,77 +59,115 @@ String device_name = "ESP32-AC";
 // Tópicos MQTT
 String topic_command;
 String topic_state;
-String topic_discovery = "smart_ac/discovery";  // Tópico de descoberta
+const char* topic_discovery = "smart_ac/discovery";
 
 // Temporizadores
 unsigned long lastHeartbeat = 0;
 unsigned long lastReconnectAttempt = 0;
+const unsigned long RECONNECT_INTERVAL_MS = 5000; // tenta reconectar a cada 5s sem bloquear
+const unsigned long HEARTBEAT_INTERVAL_MS = 15000; // 15s
+
+// LED blink (não bloqueante)
+unsigned long ledBlinkUntil = 0;
+const unsigned long LED_BLINK_MS = 150;
+
+// NTP
+const char* ntpPool = "pool.ntp.org";
+const long gmtOffset_sec = 0;       // ajuste pro seu fuso se necessário (ex: -3*3600)
+const int daylightOffset_sec = 0;
 
 // ==========================================
-// PROTÓTIPOS DE FUNÇÃO (ADICIONADOS NOVOS)
+// PROTÓTIPOS
 // ==========================================
 void setupWiFi();
-void reconnectMQTT();
+void tryReconnectMQTT(); // não bloqueante
 void mqttCallback(char* topic, byte* payload, unsigned int length);
-void publicarStatus();  
-void publicarStatusComTipo(String tipo);  
-void publicarDescoberta();
-void publicarParaListener();  // NOVO: Função para enviar status para Django listener
+void publishState();           // publica usando formato esperado pelo Django, retain=true
+void publishDiscovery();
+void publishLWT();            // publica mensagem LWT (usado no connect)
 void controlFujitsu(bool power, int temp, String mode);
 void controlSpringer(bool power, int temp, String mode);
 void controlCarrier(bool power, int temp, String mode);
 void gerarDeviceID();
-void enviarTesteInicial();    // NOVO: Função para teste inicial
+void enviarTesteInicial();
+time_t getTimestamp(); // retorna epoch seconds (com fallback)
 
 // ==========================================
 // SETUP
 // ==========================================
 void setup() {
   Serial.begin(115200);
-  delay(1000);
-  
-  Serial.println("\n\n=== SMART AC CONTROLLER ESP32 ===");
-  
-  // Configurar pinos
+  delay(500);
+
+  Serial.println("\n\n=== SMART AC CONTROLLER ESP32 (CORRIGIDO) ===");
+
+  // pinos
   pinMode(LED_STATUS, OUTPUT);
   pinMode(BUTTON_CONFIG, INPUT_PULLUP);
   digitalWrite(LED_STATUS, LOW);
-  
-  // Verificar botão de configuração
+
+  // botão de configuração: press and hold (3s) para entrar
+  unsigned long btnDownAt = 0;
   if (digitalRead(BUTTON_CONFIG) == LOW) {
-    configMode = true;
-    Serial.println("Modo de configuração ativado");
-    digitalWrite(LED_STATUS, HIGH);
+    // debounce + hold detection
+    unsigned long start = millis();
+    while (millis() - start < 50) delay(1); // pequeno debounce
+    if (digitalRead(BUTTON_CONFIG) == LOW) {
+      // requer segurar 3s
+      Serial.println("Botão pressionado — segure 3s para resetar Wi-Fi...");
+      unsigned long holdStart = millis();
+      while (digitalRead(BUTTON_CONFIG) == LOW && (millis() - holdStart) < 3000) {
+        delay(10);
+      }
+      if (digitalRead(BUTTON_CONFIG) == LOW) {
+        configMode = true;
+        Serial.println("Modo de configuração ativado (reset Wi-Fi).");
+        digitalWrite(LED_STATUS, HIGH);
+      } else {
+        Serial.println("Press curto detectado — ignorando.");
+      }
+    }
   }
-  
+
   // Inicializar IR
   irsend.begin();
   ac_fujitsu.begin();
   ac_fujitsu.setModel(fujitsu_ac_remote_model_t::ARREB1E);
   ac_springer.begin();
   ac_carrier.begin();
-  
-  // Inicializar memória não-volátil
+
+  // NVS
   preferences.begin("smart-ac", false);
-  
-  // Gerar/ler device_id
+
+  // gerar ou recuperar device_id
   gerarDeviceID();
-  
-  // Configurar Wi-Fi
+  topic_command = "smart_ac/" + device_id + "/command";
+  topic_state = "smart_ac/" + device_id + "/state";
+
+  // Wi-Fi
   setupWiFi();
-  
-  // Configurar MQTT
-  client.setServer(mqtt_server.c_str(), mqtt_port);
+
+  // Iniciar NTP (sincroniza tempo)
+  configTime(gmtOffset_sec, daylightOffset_sec, ntpPool);
+  // tenta aguardar por até 3s (não bloqueante demais)
+  unsigned long ntpStart = millis();
+  while (millis() - ntpStart < 3000 && getTimestamp() < 100000) {
+    delay(100);
+  }
+  Serial.print("Timestamp atual: ");
+  Serial.println(getTimestamp());
+
+  // MQTT
+  client.setServer(mqtt_server, mqtt_port);
   client.setCallback(mqttCallback);
   client.setBufferSize(1024);
-  
-  // Primeira conexão
-  reconnectMQTT();
-  
-  // Teste inicial de comunicação
-  delay(2000);
+
+  // Conecta (não bloqueante: tentamos uma vez agora, e depois no loop)
+  tryReconnectMQTT();
+
+  // Teste inicial
   enviarTesteInicial();
-  
+
   Serial.println("\n=== SISTEMA PRONTO ===");
   Serial.println("Device ID: " + device_id);
   Serial.println("Tópico Comando: " + topic_command);
@@ -128,292 +178,256 @@ void setup() {
 // LOOP PRINCIPAL
 // ==========================================
 void loop() {
-  // Manter conexão Wi-Fi
+  // garantir Wi-Fi
   if (WiFi.status() != WL_CONNECTED) {
+    // tenta reconectar via WiFiManager (autoConnect é blocking, mas só é chamado quando desconectado)
     setupWiFi();
   }
-  
-  // Manter conexão MQTT
+
+  // MQTT: se desconectado, tenta reconectar periodicamente (não bloqueante)
   if (!client.connected()) {
-    reconnectMQTT();
+    if (millis() - lastReconnectAttempt > RECONNECT_INTERVAL_MS) {
+      lastReconnectAttempt = millis();
+      tryReconnectMQTT();
+    }
+  } else {
+    client.loop(); // processa mensagens
   }
-  
-  client.loop();
-  
-  // Heartbeat a cada 15 segundos (reduzido de 30 para melhor resposta)
-  if (millis() - lastHeartbeat > 15000) {
+
+  // LED blink não bloqueante
+  if (ledBlinkUntil != 0 && millis() > ledBlinkUntil) {
+    digitalWrite(LED_STATUS, LOW);
+    ledBlinkUntil = 0;
+  }
+
+  // heartbeat
+  if (millis() - lastHeartbeat > HEARTBEAT_INTERVAL_MS) {
     lastHeartbeat = millis();
     Serial.println("Enviando Heartbeat...");
-    
-    // Publicar para ambos os sistemas
-    publicarStatus();            // Para sistema antigo (compatibilidade)
-    publicarParaListener();      // PARA O DJANGO LISTENER - NOVO!
-    
-    // A cada 4 heartbeats (1 minuto), envia descoberta também
+    // publica apenas o estado simples (formato esperado pelo Django) - com retain
+    publishState();
+
     static int heartbeatCount = 0;
     heartbeatCount++;
-    if (heartbeatCount % 4 == 0) {
-      publicarDescoberta();
+    if (heartbeatCount % 4 == 0) { // a cada ~1 minuto
+      publishDiscovery();
     }
   }
 }
 
 // ==========================================
-// NOVA FUNÇÃO: Teste inicial
+// FUNÇÕES UTILITÁRIAS
 // ==========================================
-void enviarTesteInicial() {
-  Serial.println("=== TESTE INICIAL DE COMUNICAÇÃO ===");
-  publicarDescoberta();
-  publicarStatus();
-  publicarParaListener();  // 🔥 ENVIA PARA O DJANGO IMEDIATAMENTE
-  Serial.println("=== TESTES ENVIADOS ===");
+time_t getTimestamp() {
+  time_t now = time(nullptr);
+  if (now < 100000) { // sem sync NTP, fallback para millis (epoch unknown)
+    // converte millis() para segundos desde boot — marca que não é epoch real
+    return (time_t)(millis() / 1000);
+  }
+  return now;
 }
 
 // ==========================================
-// FUNÇÕES DE CONFIGURAÇÃO
+// GERAR DEVICE ID
 // ==========================================
 void gerarDeviceID() {
-  // Tentar ler device_id salvo
   device_id = preferences.getString("device_id", "");
-  
   if (device_id == "") {
-    // Gerar novo ID baseado no MAC address
     String mac = WiFi.macAddress();
     mac.replace(":", "");
-    // Pegar últimos 6 caracteres do MAC
     String macSuffix = mac.substring(mac.length() - 6);
     device_id = "esp32_" + macSuffix;
-    
-    // Salvar nas preferências
     preferences.putString("device_id", device_id);
     Serial.println("Novo Device ID gerado: " + device_id);
   } else {
     Serial.println("Device ID recuperado: " + device_id);
   }
-  
-  // Definir tópicos
-  topic_command = "smart_ac/" + device_id + "/command";
-  topic_state = "smart_ac/" + device_id + "/state";
 }
 
+// ==========================================
+// WIFI (WiFiManager)
+// ==========================================
 void setupWiFi() {
   if (configMode) {
     wm.resetSettings();
     Serial.println("Configurações Wi-Fi resetadas");
   }
-  
-  // Parâmetros customizados
+
+  // parâmetros customizados
   WiFiManagerParameter custom_name("name", "Nome do Dispositivo", device_name.c_str(), 40);
   WiFiManagerParameter custom_brand("brand", "Marca Padrão", currentBrand.c_str(), 20);
-  
   wm.addParameter(&custom_name);
   wm.addParameter(&custom_brand);
-  
-  // Nome do AP de configuração
+
   String ap_name = "AC-" + device_id.substring(device_id.length() - 6);
-  
-  // Tentar conectar
+
   if (!wm.autoConnect(ap_name.c_str())) {
-    Serial.println("Falha na conexão Wi-Fi");
+    Serial.println("Falha na conexão Wi-Fi — reiniciando...");
+    delay(2000);
     ESP.restart();
   }
-  
-  // Atualizar configurações
+
+  // atualizar valores se foram preenchidos
   device_name = custom_name.getValue();
   currentBrand = custom_brand.getValue();
-  
-  // Salvar configurações
   preferences.putString("device_name", device_name);
   preferences.putString("default_brand", currentBrand);
-  
+
   Serial.println("\nWi-Fi conectado!");
   Serial.println("SSID: " + WiFi.SSID());
   Serial.println("IP: " + WiFi.localIP().toString());
   Serial.println("Nome do dispositivo: " + device_name);
   Serial.println("Marca padrão: " + currentBrand);
-  
-  digitalWrite(LED_STATUS, LOW);
 }
 
 // ==========================================
-// FUNÇÕES MQTT
+// MQTT: reconexão não bloqueante + LWT
 // ==========================================
-void reconnectMQTT() {
-  while (!client.connected()) {
-    Serial.print("Conectando MQTT...");
-    String clientId = "ESP32-" + device_id;
-    
-    if (client.connect(clientId.c_str())) {
-      Serial.println(" CONECTADO!");
-      client.subscribe(topic_command.c_str());
-      Serial.println("Inscrito em: " + topic_command);
-      
-      // Publicar status inicial
-      publicarStatus();
-      publicarDescoberta();
-      publicarParaListener();  // 🔥 NOVO: Notifica Django também
-    } else {
-      Serial.print(" Falha rc=");
-      Serial.print(client.state());
-      delay(5000);
-    }
+void tryReconnectMQTT() {
+  if (client.connected()) return;
+
+  Serial.print("Tentando conectar MQTT... ");
+
+  String clientId = "ESP32-" + device_id;
+
+  // Configura LWT (will message) para avisar offline se desconexão inesperada
+  String willTopic = String("smart_ac/") + device_id + "/lwt";
+  String willMessage = "{\"device_id\":\"" + device_id + "\",\"online\":false}";
+
+  // PubSubClient permite conectar com Will (client.connect overload)
+  bool ok = client.connect(clientId.c_str(), nullptr, nullptr,
+                          willTopic.c_str(), // willTopic
+                          0,                 // willQos (0)
+                          true,              // willRetain
+                          willMessage.c_str());
+
+  if (ok) {
+    Serial.println("OK");
+    // Inscrever em comando do device
+    client.subscribe(topic_command.c_str());
+    Serial.println("Inscrito em: " + topic_command);
+
+    // publicar discovery e state (uma vez) com retain para state
+    publishDiscovery();
+    publishState();
+  } else {
+    Serial.print("falhou, state=");
+    Serial.println(client.state());
   }
 }
 
+// ==========================================
+// CALLBACK MQTT (execução rápida)
+// ==========================================
 void mqttCallback(char* topic, byte* payload, unsigned int length) {
+  // Monta string sem usar delay/blocking
   String message;
-  for (int i = 0; i < length; i++) message += (char)payload[i];
-  
+  message.reserve(length + 1);
+  for (unsigned int i = 0; i < length; i++) message += (char)payload[i];
+
   Serial.println("\n📩 Comando recebido: " + message);
-  
-  // Piscar LED
+
+  // blink não-blocking (liga LED e registra até quando ficará aceso)
   digitalWrite(LED_STATUS, HIGH);
-  delay(100);
-  digitalWrite(LED_STATUS, LOW);
-  
+  ledBlinkUntil = millis() + LED_BLINK_MS;
+
+  // Desserializa rápido
   DynamicJsonDocument doc(1024);
   DeserializationError error = deserializeJson(doc, message);
-  
   if (error) {
     Serial.println("❌ Erro JSON: " + String(error.c_str()));
     return;
   }
-  
-  // Atualizar estado interno
+
+  // Atualiza estado interno (valida ranges)
   if (doc.containsKey("power")) {
     currentPower = doc["power"].as<bool>();
   }
-  
   if (doc.containsKey("temp")) {
-    currentTemp = doc["temp"].as<int>();
-    if (currentTemp < 16) currentTemp = 16;
-    if (currentTemp > 30) currentTemp = 30;
+    int t = doc["temp"].as<int>();
+    if (t < 16) t = 16;
+    if (t > 30) t = 30;
+    currentTemp = t;
   }
-  
   if (doc.containsKey("mode")) {
-    currentMode = doc["mode"].as<String>();
+    currentMode = doc["mode"].as<const char*>();
   }
-  
   if (doc.containsKey("brand")) {
-    currentBrand = doc["brand"].as<String>();
+    currentBrand = doc["brand"].as<const char*>();
   }
-  
-  // Executar comando IR
+
+  // Executa IR (a chamada de envio IR pode demorar, mas é inevitável — mantenha simples)
   String brandLower = currentBrand;
   brandLower.toLowerCase();
-  
+
   if (brandLower.indexOf("fujitsu") != -1) {
     controlFujitsu(currentPower, currentTemp, currentMode);
-  } 
-  else if (brandLower.indexOf("spring") != -1 || brandLower.indexOf("midea") != -1) {
+  } else if (brandLower.indexOf("spring") != -1 || brandLower.indexOf("midea") != -1) {
     controlSpringer(currentPower, currentTemp, currentMode);
-  } 
-  else if (brandLower.indexOf("carrier") != -1) {
+  } else if (brandLower.indexOf("carrier") != -1) {
     controlCarrier(currentPower, currentTemp, currentMode);
-  } 
-  else {
+  } else {
     Serial.println("⚠️ Marca não suportada: " + currentBrand);
   }
-  
-  // 🔥 NOVO: Avisar Django que recebeu e executou o comando
-  publicarParaListener();
-  // Mantém também o status normal (para compatibilidade)
-  publicarStatus();
+
+  // publicar estado atualizado (formato simples; retain=true para disponibilidade)
+  publishState();
 }
 
 // ==========================================
-// 🔥 NOVA FUNÇÃO: Publicar para Django Listener
+// PUBLICAÇÃO CONSOLIDADA (formato que Django espera)
 // ==========================================
-void publicarParaListener() {
-  // Publica no formato EXATO que o Django mqtt_listener.py espera
-  // Tópico: smart_ac/device_id/state (mesmo que o tópico normal, mas com formato específico)
-  
+void publishState() {
   DynamicJsonDocument doc(512);
-  
-  // 🔥 CAMPOS EXATOS QUE O DJANGO ESPERA:
   doc["device_id"] = device_id;
   doc["power"] = currentPower;
-  doc["temp"] = currentTemp;      // 🔥 OBRIGATÓRIO: "temp" em minúsculo
+  doc["temp"] = currentTemp;      // OBRIGATÓRIO: temp em minúsculo
   doc["mode"] = currentMode;
   doc["brand"] = currentBrand;
   doc["name"] = device_name;
   doc["online"] = true;
-  doc["timestamp"] = millis();
-  
-  // 🔥 IMPORTANTE: NÃO incluir campo "type" para atualizações de status normais
-  // O Django usa "type" apenas para discovery
-  
+  doc["timestamp"] = (long)getTimestamp(); // epoch seconds (preferível ao millis)
+
   char buffer[512];
-  serializeJson(doc, buffer);
-  
-  if (client.publish(topic_state.c_str(), buffer)) {
-    Serial.print(">> Status enviado para Django: ");
+  size_t n = serializeJson(doc, buffer);
+
+  // Publish com retain para que novos subscribers recebam o estado
+  bool ok = client.publish(topic_state.c_str(), buffer, true);
+  if (ok) {
+    Serial.print(">> Estado publicado (retain): ");
     Serial.println(buffer);
   } else {
-    Serial.println(">> Erro ao enviar status para Django!");
+    Serial.println(">> Erro ao publicar estado!");
   }
 }
 
 // ==========================================
-// FUNÇÕES DE PUBLICAÇÃO DE STATUS (ORIGINAIS)
+// DISCOVERY
 // ==========================================
-void publicarStatus() {
-  // Versão sem parâmetro (mantém compatibilidade)
-  publicarStatusComTipo("status");
-}
-
-void publicarStatusComTipo(String tipo) {
+void publishDiscovery() {
   DynamicJsonDocument doc(512);
-  
   doc["device_id"] = device_id;
-  doc["type"] = tipo;
-  doc["online"] = true;
-  doc["power"] = currentPower;
-  doc["temp"] = currentTemp;
-  doc["mode"] = currentMode;
-  doc["brand"] = currentBrand;
-  doc["name"] = device_name;
-  doc["rssi"] = WiFi.RSSI();
-  doc["timestamp"] = millis();
-  
-  char buffer[512];
-  serializeJson(doc, buffer);
-  
-  if (client.publish(topic_state.c_str(), buffer)) {
-    Serial.print(">> Status publicado (compatibilidade): ");
-    Serial.println(buffer);
-  } else {
-    Serial.println(">> Erro ao publicar status!");
-  }
-}
-
-void publicarDescoberta() {
-  DynamicJsonDocument doc(512);
-  
-  doc["device_id"] = device_id;
-  doc["type"] = "discovery";  // 🔥 IMPORTANTE: "type": "discovery" para o Django
+  doc["type"] = "discovery";
   doc["name"] = device_name;
   doc["brand"] = currentBrand;
   doc["mac"] = WiFi.macAddress();
   doc["ip"] = WiFi.localIP().toString();
   doc["status"] = "available";
-  doc["timestamp"] = millis();
-  
+  doc["timestamp"] = (long)getTimestamp();
+
   char buffer[512];
   serializeJson(doc, buffer);
-  
-  if (client.publish(topic_discovery.c_str(), buffer)) {
-    Serial.println("Mensagem de descoberta publicada");
-  }
+  client.publish(topic_discovery, buffer); // discovery não precisa ser retain
+  Serial.println("Mensagem de discovery publicada");
 }
 
 // ==========================================
-// FUNÇÕES IR (MANTIDAS COMO ANTES)
+// FUNÇÕES IR
 // ==========================================
 void controlFujitsu(bool power, int temp, String mode) {
   Serial.println("IR: Fujitsu");
   if (power) {
-    ac_fujitsu.on(); 
+    ac_fujitsu.on();
     ac_fujitsu.setTemp(temp);
     if (mode == "cool") ac_fujitsu.setMode(kFujitsuAcModeCool);
     else if (mode == "heat") ac_fujitsu.setMode(kFujitsuAcModeHeat);
@@ -427,7 +441,7 @@ void controlFujitsu(bool power, int temp, String mode) {
 }
 
 void controlSpringer(bool power, int temp, String mode) {
-  Serial.println("IR: Springer");
+  Serial.println("IR: Springer/Midea");
   ac_springer.setPower(power);
   if (power) {
     ac_springer.setTemp(temp);
@@ -441,9 +455,11 @@ void controlSpringer(bool power, int temp, String mode) {
 }
 
 void controlCarrier(bool power, int temp, String mode) {
-  Serial.println("IR: Carrier");
+  Serial.println("IR: Carrier (Bosch/COOLIX wrapper)");
   if (!power) {
-    irsend.sendCOOLIX(0xB27BE0, 24);
+    // Se a biblioteca ac_carrier tiver método off(), prefira-o. Caso contrário, este fallback usa sendCOOLIX.
+    // Chave: confirmar com sua biblioteca se existe ac_carrier.off()
+    irsend.sendCOOLIX(0xB27BE0, 24); // fallback: testado em alguns modelos
   } else {
     ac_carrier.setPower(true);
     ac_carrier.setTemp(temp);
@@ -454,4 +470,15 @@ void controlCarrier(bool power, int temp, String mode) {
     else ac_carrier.setMode(kBosch144Auto);
     ac_carrier.send();
   }
+}
+
+// ==========================================
+// TESTE INICIAL
+// ==========================================
+void enviarTesteInicial() {
+  Serial.println("=== TESTE INICIAL DE COMUNICAÇÃO ===");
+  // envia discovery + state (não duplicar)
+  publishDiscovery();
+  publishState();
+  Serial.println("=== TESTES ENVIADOS ===");
 }

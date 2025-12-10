@@ -4,13 +4,16 @@ from .models import Device
 class DeviceSerializer(serializers.ModelSerializer):
     class Meta:
         model = Device
-        fields = [
-            'id', 'device_id', 'name', 'room', 'brand', 
-            'wifi_ssid', 'wifi_password', 'is_online',
-            'power', 'temperature', 'mode', 'is_registered',
-            'is_configured', 'last_seen', 'last_command'
+        fields = '__all__'
+        read_only_fields = [
+            'is_online',
+            'power',
+            'temperature',
+            'mode',
+            'is_configured',
+            'last_sent',
+            'last_command'
         ]
-        read_only_fields = ['is_online', 'last_seen', 'last_command']
 
 class DeviceCreateSerializer(serializers.ModelSerializer):
     """Serializer específico para criação com campos extras"""
