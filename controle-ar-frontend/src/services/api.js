@@ -29,5 +29,15 @@ export const deviceService = {
       console.error("Erro ao atualizar:", err.response?.data);
       throw new Error("Erro ao atualizar");
     }
+  },
+
+  delete: async (id) => {
+    try {
+      const res = await api.delete(`devices/${id}/`);
+      return res.data;
+    } catch (err) {
+      console.error("Erro ao excluir:", err.response?.data);
+      throw new Error("Erro ao excluir");
+    }
   }
 };

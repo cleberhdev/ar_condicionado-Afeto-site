@@ -1,17 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { Search, Gamepad2, Pencil, Trash2, Wifi } from 'lucide-react';
 import RemoteControlModal from './RemoteControlModal';
-import EditDeviceModal from './EditDeviceModal'; 
+import EditDeviceModal from './EditDeviceModal';
 import DeleteConfirmationModal from './DeleteConfirmationModal';
 
 const ITEMS_PER_PAGE = 4;
 
 const DeviceTable = ({ data: initialData = [], onDelete, onEdit }) => {
   const [data, setData] = useState([]);
-  
+
   // Estados de busca
   const [searchTerm, setSearchTerm] = useState('');
-  const [searchType, setSearchType] = useState('all'); 
+  const [searchType, setSearchType] = useState('all');
   const [currentPage, setCurrentPage] = useState(1);
 
   // Estados dos Modais
@@ -44,7 +44,7 @@ const DeviceTable = ({ data: initialData = [], onDelete, onEdit }) => {
 
   return (
     <div className="space-y-6">
-      
+
       {/* Barra de Busca Simples */}
       <div className="relative">
         <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -129,9 +129,9 @@ const DeviceTable = ({ data: initialData = [], onDelete, onEdit }) => {
 
       {/* --- MODAIS --- */}
       {selectedDevice && (
-        <RemoteControlModal 
-          isOpen={!!selectedDevice} 
-          onClose={() => setSelectedDevice(null)} 
+        <RemoteControlModal
+          isOpen={!!selectedDevice}
+          onClose={() => setSelectedDevice(null)}
           device={selectedDevice}  // <--- IMPORTANTE: Passando o objeto completo
         />
       )}
@@ -141,7 +141,15 @@ const DeviceTable = ({ data: initialData = [], onDelete, onEdit }) => {
       )}
 
       {deletingDevice && (
-        <DeleteConfirmationModal isOpen={!!deletingDevice} onClose={() => setDeletingDevice(null)} onConfirm={() => { if(onDelete) onDelete(deletingDevice.device_id || deletingDevice.id); setDeletingDevice(null); }} deviceName={deletingDevice.name} />
+        <DeleteConfirmationModal
+          isOpen={!!deletingDevice}
+          onClose={() => setDeletingDevice(null)}
+          onConfirm={() => {
+            if (onDelete) onDelete(deletingDevice.id);
+            setDeletingDevice(null);
+          }}
+          deviceName={deletingDevice.name}
+        />
       )}
     </div>
   );
