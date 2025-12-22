@@ -94,10 +94,10 @@ time_t getTimestamp(); // retorna epoch seconds (com fallback)
 // ==========================================
 // Resetar o WiFi(Para Testes)
 // ==========================================
-// void resetWifi() {
-//   WiFi.disconnect(true, true); 
-//   delay(1000);
-// }
+void resetWifi() {
+  WiFi.disconnect(true, true); 
+  delay(1000);
+}
 
 // ==========================================
 // SETUP
@@ -105,7 +105,7 @@ time_t getTimestamp(); // retorna epoch seconds (com fallback)
 void setup() {
   Serial.begin(115200);
   delay(500);
-  // resetWifi();
+  resetWifi();
 
   Serial.println("\n\n=== SMART AC CONTROLLER ESP32 (CORRIGIDO) ===");
 

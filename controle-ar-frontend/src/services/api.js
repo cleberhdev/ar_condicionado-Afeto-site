@@ -1,4 +1,4 @@
-// api.js
+// src/services/api.js
 import axios from "axios";
 
 const api = axios.create({
@@ -38,6 +38,18 @@ export const deviceService = {
     } catch (err) {
       console.error("Erro ao excluir:", err.response?.data);
       throw new Error("Erro ao excluir");
+    }
+  },
+
+  // 👇 ADICIONE ESTA FUNÇÃO 👇
+  sendCommand: async (id, payload) => {
+    try {
+      // O endpoint no backend é /api/devices/{id}/control/
+      const res = await api.post(`devices/${id}/control/`, payload);
+      return res.data;
+    } catch (err) {
+      console.error("Erro ao enviar comando:", err.response?.data);
+      throw new Error("Erro ao enviar comando");
     }
   }
 };

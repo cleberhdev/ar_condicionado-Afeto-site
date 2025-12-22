@@ -2,9 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { X, Power, Snowflake, Sun, Wind, Droplets, Minus, Plus, Zap } from 'lucide-react';
 import { deviceService } from '../services/api';
 
-const RemoteControlModal = ({ isOpen, onClose, device }) => {
+const RemoteControlModal = ({ isOpen, onClose, device, onUpdate }) => {
 
-  // Estados internos do controle
   const [power, setPower] = useState(device?.power || false);
   const [temp, setTemp] = useState(device?.temperature || 24);
   const [mode, setMode] = useState(device?.mode || 'cool');
@@ -12,7 +11,6 @@ const RemoteControlModal = ({ isOpen, onClose, device }) => {
   const MIN_TEMP = 16;
   const MAX_TEMP = 30;
 
-  // Atualiza os estados ao trocar de dispositivo
   useEffect(() => {
     if (device) {
       setPower(device.power);
@@ -21,18 +19,15 @@ const RemoteControlModal = ({ isOpen, onClose, device }) => {
     }
   }, [device]);
 
-  // --------------------------------------------
-  // FUNÇÃO CENTRAL — Envia comando para API REST
-  // --------------------------------------------
   const sendCommand = async (newPower, newTemp, newMode) => {
     if (!device) return;
 
     const payload = {
       power: newPower,
-      temp: newTemp,      // API converte para temperature
+      temp: newTemp,
       mode: newMode,
       brand: device.brand || "Carrier",
-      device_id: device.device_id   // Informação para backend → MQTT
+      device_id: device.device_id
     };
 
     console.log("📡 Enviando comando:", {
@@ -43,20 +38,27 @@ const RemoteControlModal = ({ isOpen, onClose, device }) => {
 
     try {
       await deviceService.sendCommand(device.id, payload);
+
+      if (onUpdate) {
+        onUpdate({
+          power: newPower,
+          temperature: newTemp,
+          mode: newMode
+        });
+      }
+
     } catch (error) {
       console.error("Erro ao enviar comando:", error);
       alert(`Erro ao enviar comando: ${error.message}`);
     }
   };
 
-  // Ligar / Desligar
   const handlePower = () => {
     const newState = !power;
     setPower(newState);
     sendCommand(newState, temp, mode);
   };
 
-  // Aumentar ou reduzir temperatura
   const handleTempChange = (increment) => {
     if (!power) return;
     const newTemp = Math.min(Math.max(temp + increment, MIN_TEMP), MAX_TEMP);
@@ -64,16 +66,12 @@ const RemoteControlModal = ({ isOpen, onClose, device }) => {
     sendCommand(power, newTemp, mode);
   };
 
-  // Alterar modo
   const handleModeChange = (newModeValue) => {
     if (!power) return;
     setMode(newModeValue);
     sendCommand(power, temp, newModeValue);
   };
 
-  // ----------------------------------------------------
-  // VISUAL — Função de cor do background do modal
-  // ----------------------------------------------------
   const getModalBackground = () => {
     if (!power) return 'bg-gray-900';
     switch (mode) {
@@ -87,16 +85,22 @@ const RemoteControlModal = ({ isOpen, onClose, device }) => {
 
   if (!isOpen || !device) return null;
 
-  // Cálculo do dial de temperatura
+  // --- LÓGICA DO DIAL CORRIGIDA ---
   const radius = 100;
   const circumference = 2 * Math.PI * radius;
+  // Gap de 35% do círculo (parte de baixo aberta)
+  const baseOffset = circumference * 0.35; 
+  
+  // Percentual preenchido baseado na temperatura (0 a 1)
   const percentage = (temp - MIN_TEMP) / (MAX_TEMP - MIN_TEMP);
-  const strokeDashoffset = circumference - (percentage * circumference) * 0.65;
-  const baseOffset = circumference * 0.35;
+  
+  // O offset final deve variar de:
+  // - Vazio: circumference (offset máximo, esconde tudo)
+  // - Cheio: baseOffset (offset mínimo, mostra tudo menos o gap)
+  // A fórmula abaixo calcula exatamente isso:
+  const activeStrokeDashoffset = circumference - (percentage * (circumference - baseOffset));
 
-  // ----------------------------------------------------
-  // RENDERIZAÇÃO DO MODAL
-  // ----------------------------------------------------
+
   return (
     <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center backdrop-blur-sm p-4 animate-fade-in">
 
@@ -133,6 +137,7 @@ const RemoteControlModal = ({ isOpen, onClose, device }) => {
           {/* dial da temperatura */}
           <div className="relative w-64 h-64 flex items-center justify-center mb-8">
             <svg className="w-full h-full transform rotate-[150deg]" viewBox="0 0 240 240">
+              {/* Círculo de Fundo (Track) */}
               <circle cx="120" cy="120" r={radius} fill="none"
                 stroke="rgba(255,255,255,0.1)"
                 strokeWidth="18"
@@ -141,6 +146,7 @@ const RemoteControlModal = ({ isOpen, onClose, device }) => {
                 strokeDashoffset={baseOffset}
               />
 
+              {/* Círculo Ativo (Progresso) */}
               {power && (
                 <circle
                   cx="120"
@@ -151,7 +157,8 @@ const RemoteControlModal = ({ isOpen, onClose, device }) => {
                   strokeWidth="18"
                   strokeLinecap="round"
                   strokeDasharray={circumference}
-                  strokeDashoffset={strokeDashoffset + baseOffset}
+                  // 👇 AQUI ESTAVA O ERRO: Removemos o "+ baseOffset" redundante
+                  strokeDashoffset={activeStrokeDashoffset}
                   className="transition-all duration-700 ease-out drop-shadow-[0_0_10px_rgba(255,255,255,0.5)]"
                 />
               )}

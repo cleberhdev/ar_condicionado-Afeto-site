@@ -1,15 +1,7 @@
 import React, { useState } from 'react';
-import { 
-  Power, 
-  Snowflake, 
-  Sun, 
-  Wind, 
-  Droplets, 
-  Zap, 
-  ThermometerSun,
-  Minus,
-  Plus
-} from 'lucide-react';
+// 1. Importe o serviço e ícones
+import { deviceService } from '../services/api'; 
+import { Power, Snowflake, Sun, Wind, Droplets, Zap, ThermometerSun, Minus, Plus, Loader2 } from 'lucide-react';
 import SaveConfirmationModal from './SaveConfirmationModal';
 
 const MasterControlCard = () => {
@@ -19,34 +11,69 @@ const MasterControlCard = () => {
 
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
   const [pendingAction, setPendingAction] = useState(null);
+  
+  // 2. Estado de carregamento para feedback visual
+  const [isLoading, setIsLoading] = useState(false);
 
   const MIN_TEMP = 16;
   const MAX_TEMP = 30;
 
+  // ... (cálculos do raio e background mantêm iguais) ...
   const radius = 100;
   const circumference = 2 * Math.PI * radius;
-  const percentage = (temp - MIN_TEMP) / (MAX_TEMP - MIN_TEMP);
-  const strokeDashoffset = circumference - (percentage * circumference) * 0.65; 
   const baseOffset = circumference * 0.35;
+  const percentage = (temp - MIN_TEMP) / (MAX_TEMP - MIN_TEMP);
+  // Ajuste da fórmula visual (igual fizemos no modal individual)
+  const strokeDashoffset = circumference - (percentage * (circumference - baseOffset));
 
-  // --- Lógica de Cores do Card ---
   const getCardBackground = () => {
-    if (!power) return 'bg-gray-800'; // Cor quando desligado
-
-    switch (mode) {
-      case 'cool': return 'bg-gradient-to-br from-blue-600 to-indigo-700';
-      case 'heat': return 'bg-gradient-to-br from-orange-500 to-red-600';
-      case 'fan': return 'bg-gradient-to-br from-emerald-500 to-teal-600'; // Verde para ventilar
-      case 'dry': return 'bg-gradient-to-br from-slate-500 to-gray-600'; // Cinza para desumidificar
-      default: return 'bg-gradient-to-br from-blue-600 to-indigo-700';
-    }
-  };
+     if (!power) return 'bg-gray-800';
+     switch (mode) {
+       case 'cool': return 'bg-gradient-to-br from-blue-600 to-indigo-700';
+       case 'heat': return 'bg-gradient-to-br from-orange-500 to-red-600';
+       case 'fan': return 'bg-gradient-to-br from-emerald-500 to-teal-600';
+       case 'dry': return 'bg-gradient-to-br from-slate-500 to-gray-600';
+       default: return 'bg-gradient-to-br from-blue-600 to-indigo-700';
+     }
+   };
 
   const handleTempChange = (increment) => {
     setTemp(prev => {
       const newValue = prev + increment;
       return Math.min(Math.max(newValue, MIN_TEMP), MAX_TEMP);
     });
+  };
+
+  // 3. Função auxiliar para enviar para todos
+  const executeBroadcastCommand = async (commandPayload) => {
+    setIsLoading(true);
+    try {
+      // Busca todos os dispositivos primeiro
+      const devices = await deviceService.getAll();
+      const onlineDevices = devices.filter(d => d.is_online && d.is_registered);
+
+      console.log(`📡 Enviando comando para ${onlineDevices.length} dispositivos...`);
+
+      // Envia comando para cada um (Promise.all para ser paralelo e rápido)
+      const promises = onlineDevices.map(device => {
+        // Mescla o payload com o ID do dispositivo, se necessário pelo backend
+        const fullPayload = { 
+            ...commandPayload, 
+            device_id: device.device_id,
+            brand: device.brand 
+        };
+        return deviceService.sendCommand(device.id, fullPayload);
+      });
+
+      await Promise.all(promises);
+      alert(`Comando enviado para ${onlineDevices.length} dispositivos com sucesso!`);
+
+    } catch (error) {
+      console.error("Erro no broadcast:", error);
+      alert("Erro ao enviar comandos para a rede.");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const requestBroadcast = (type) => {
@@ -58,20 +85,32 @@ const MasterControlCard = () => {
         type: 'POWER',
         title: nextState ? "Ligar Todos?" : "Desligar Todos?",
         message: nextState 
-          ? "Isso enviará um comando para LIGAR todos os ares-condicionados cadastrados."
-          : "Isso enviará um comando para DESLIGAR todos os ares-condicionados cadastrados.",
+          ? "Isso enviará um comando para LIGAR todos os ares-condicionados."
+          : "Isso enviará um comando para DESLIGAR todos os ares-condicionados.",
         execute: () => {
           setPower(nextState);
-          console.log(`Comando MESTRE executado: POWER ${nextState ? 'ON' : 'OFF'}`);
+          // Chama a função real
+          executeBroadcastCommand({
+            power: nextState,
+            temp: temp,
+            mode: mode
+          });
         }
       };
     } else if (type === 'SYNC') {
       actionData = {
         type: 'SYNC',
         title: "Sincronizar Todos?",
-        message: `Isso aplicará as configurações atuais (Temp: ${temp}°C, Modo: ${mode}) em TODOS os dispositivos online.`,
+        message: `Aplicar (Temp: ${temp}°C, Modo: ${mode}) em TODOS os dispositivos?`,
         execute: () => {
-          console.log(`Comando MESTRE executado: SYNC | Temp: ${temp} | Mode: ${mode}`);
+          // Garante que o power esteja condizente com o painel (provavelmente ligado se está sincronizando configs)
+          if (!power) setPower(true); 
+          
+          executeBroadcastCommand({
+            power: true, // Força ligar ao sincronizar configurações
+            temp: temp,
+            mode: mode
+          });
         }
       };
     }
@@ -90,15 +129,25 @@ const MasterControlCard = () => {
 
   return (
     <>
-      {/* Aplicando a classe dinâmica de background aqui */}
       <div className={`w-full h-[45vh] min-h-[350px] ${getCardBackground()} rounded-3xl shadow-2xl p-6 flex flex-col md:flex-row items-center justify-between text-white relative overflow-hidden transition-all duration-500 ease-in-out hover:shadow-xl`}>
         
+        {/* Loading Overlay */}
+        {isLoading && (
+            <div className="absolute inset-0 bg-black/50 z-50 flex flex-col items-center justify-center backdrop-blur-sm">
+                <Loader2 size={48} className="animate-spin mb-2" />
+                <span className="font-bold tracking-wide">Enviando Comandos...</span>
+            </div>
+        )}
+
+        {/* ... (O RESTO DO SEU JSX MANTÉM IGUAL: fundos, esquerda, centro, direita) ... */}
+        {/* Apenas verifique se no centro você atualizou a lógica do strokeDashoffset do SVG */}
         <div className="absolute top-[-50px] left-[-50px] w-40 h-40 bg-white/10 rounded-full blur-3xl"></div>
         <div className="absolute bottom-[-50px] right-[-50px] w-60 h-60 bg-white/10 rounded-full blur-3xl"></div>
 
         {/* --- ESQUERDA --- */}
         <div className="flex-1 h-full flex flex-col justify-between z-10 p-2">
-          <div>
+            {/* ...teu codigo... */}
+            <div>
             <div className="flex items-center gap-2 mb-1 opacity-80">
               <Zap size={20} />
               <span className="text-sm font-medium tracking-wider uppercase">Controle Mestre</span>
@@ -119,7 +168,6 @@ const MasterControlCard = () => {
               <button
                 key={m.id}
                 onClick={() => setMode(m.id)}
-                // Ajuste de cores dos botões para ficarem legíveis em qualquer fundo
                 className={`flex items-center gap-2 px-4 py-3 rounded-xl transition-all duration-200 border border-transparent
                   ${mode === m.id 
                     ? 'bg-white text-gray-900 shadow-lg font-bold scale-105' 
@@ -135,17 +183,18 @@ const MasterControlCard = () => {
 
         {/* --- CENTRO --- */}
         <div className="flex-1 flex flex-col items-center justify-center relative z-10 scale-90 md:scale-100">
-          <div className="relative w-64 h-64 flex items-center justify-center">
+           {/* ...teu codigo do SVG, lembre-se de usar o strokeDashoffset CORRIGIDO aqui... */}
+           <div className="relative w-64 h-64 flex items-center justify-center">
             <svg className="w-full h-full transform rotate-[150deg]" viewBox="0 0 240 240">
               <circle cx="120" cy="120" r={radius} fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="18" strokeLinecap="round" strokeDasharray={circumference} strokeDashoffset={baseOffset} />
               <circle
                 cx="120" cy="120" r={radius} fill="none" stroke="white" strokeWidth="18" strokeLinecap="round"
-                strokeDasharray={circumference} strokeDashoffset={strokeDashoffset + baseOffset}
+                strokeDasharray={circumference} strokeDashoffset={strokeDashoffset} // <--- USE A VARIAVEL CORRIGIDA
                 className="transition-all duration-700 ease-out drop-shadow-[0_0_10px_rgba(255,255,255,0.5)]"
               />
             </svg>
-
-            <div className="absolute inset-0 flex flex-col items-center justify-center mb-4">
+            {/* ...resto do centro... */}
+             <div className="absolute inset-0 flex flex-col items-center justify-center mb-4">
               <div className="flex items-start">
                 <span className="text-7xl font-bold tracking-tighter drop-shadow-md">{temp}</span>
                 <span className="text-3xl font-medium mt-2">°C</span>
@@ -161,13 +210,13 @@ const MasterControlCard = () => {
             <button onClick={() => handleTempChange(1)} className="absolute bottom-4 right-4 p-3 rounded-full bg-white/10 hover:bg-white/20 transition backdrop-blur-md border border-white/10 active:scale-95">
               <Plus size={24} />
             </button>
-          </div>
+           </div>
         </div>
 
         {/* --- DIREITA --- */}
         <div className="flex-1 h-full flex flex-col justify-center items-end gap-4 z-10 pl-4 border-l border-white/10">
-          
-          <button
+             {/* ...teu codigo... */}
+             <button
             onClick={() => requestBroadcast('POWER')}
             className={`group relative flex flex-col items-center justify-center w-full h-full max-h-40 rounded-2xl transition-all duration-300 border-2 
               ${power 
@@ -187,8 +236,8 @@ const MasterControlCard = () => {
             <ThermometerSun size={20} />
             Sincronizar Todos
           </button>
-
         </div>
+
       </div>
 
       <SaveConfirmationModal 

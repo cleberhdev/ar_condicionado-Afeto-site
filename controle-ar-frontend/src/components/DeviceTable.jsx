@@ -6,7 +6,7 @@ import DeleteConfirmationModal from './DeleteConfirmationModal';
 
 const ITEMS_PER_PAGE = 4;
 
-const DeviceTable = ({ data: initialData = [], onDelete, onEdit }) => {
+const DeviceTable = ({ data: initialData = [], onDelete, onEdit, onStatusUpdate }) => {
   const [data, setData] = useState([]);
 
   // Estados de busca
@@ -45,7 +45,7 @@ const DeviceTable = ({ data: initialData = [], onDelete, onEdit }) => {
   return (
     <div className="space-y-6">
 
-      {/* Barra de Busca Simples */}
+      {/* Barra de Busca */}
       <div className="relative">
         <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
           <Search className="h-5 w-5 text-gray-400" />
@@ -79,7 +79,10 @@ const DeviceTable = ({ data: initialData = [], onDelete, onEdit }) => {
                   <tr key={device.id || device.device_id} className="hover:bg-gray-50 transition-colors">
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center">
-                        <div className="flex-shrink-0 h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold">
+                        <div className={`flex-shrink-0 h-10 w-10 rounded-full flex items-center justify-center font-bold transition-colors
+                          ${device.is_online 
+                            ? (device.power ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-500') 
+                            : 'bg-red-50 text-red-300'}`}>
                           {device.name?.charAt(0).toUpperCase()}
                         </div>
                         <div className="ml-4">
@@ -90,16 +93,34 @@ const DeviceTable = ({ data: initialData = [], onDelete, onEdit }) => {
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-900">{device.room}</td>
                     <td className="px-6 py-4 text-sm text-gray-500">{device.brand}</td>
+                    
+                    {/* 👇 MELHORIA: Ícone Wi-Fi indica conectividade agora */}
                     <td className="px-6 py-4 text-sm text-gray-600 flex items-center gap-2">
-                      <Wifi size={14} className="text-gray-400" />
-                      {device.wifi_ssid || device.wifiSsid}
+                      <Wifi size={16} className={device.is_online ? "text-green-500" : "text-red-400"} />
+                      <span>{device.wifi_ssid || device.wifiSsid || "--"}</span>
                     </td>
-                    <td className="px-6 py-4 text-sm font-medium text-gray-900">{device.temperature}°C</td>
+
+                    <td className="px-6 py-4 text-sm font-medium text-gray-900">
+                      {device.temperature}°C
+                    </td>
+
+                    {/* 👇 MUDANÇA PRINCIPAL: Status mostra Ligado/Desligado */}
                     <td className="px-6 py-4 text-center">
-                      <span className={`px-3 py-1 inline-flex text-xs font-semibold rounded-full ${device.is_online ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                        {device.is_online ? 'Online' : 'Offline'}
-                      </span>
+                      {!device.is_online ? (
+                        <span className="px-3 py-1 inline-flex text-xs font-semibold rounded-full bg-red-100 text-red-800 border border-red-200">
+                          Offline
+                        </span>
+                      ) : device.power ? (
+                        <span className="px-3 py-1 inline-flex text-xs font-semibold rounded-full bg-green-100 text-green-800 border border-green-200 shadow-sm">
+                          Ligado
+                        </span>
+                      ) : (
+                        <span className="px-3 py-1 inline-flex text-xs font-semibold rounded-full bg-gray-100 text-gray-600 border border-gray-200">
+                          Desligado
+                        </span>
+                      )}
                     </td>
+
                     <td className="px-6 py-4 text-right">
                       <div className="flex items-center justify-end gap-3">
                         <button onClick={() => setSelectedDevice(device)} className="text-blue-600 hover:bg-blue-50 p-1 rounded transition" title="Controle">
@@ -132,12 +153,18 @@ const DeviceTable = ({ data: initialData = [], onDelete, onEdit }) => {
         <RemoteControlModal
           isOpen={!!selectedDevice}
           onClose={() => setSelectedDevice(null)}
-          device={selectedDevice}  // <--- IMPORTANTE: Passando o objeto completo
+          device={selectedDevice}
+          onUpdate={(updates) => onStatusUpdate(selectedDevice.id, updates)}
         />
       )}
 
       {editingDevice && (
-        <EditDeviceModal isOpen={!!editingDevice} device={editingDevice} onClose={() => setEditingDevice(null)} onSave={onEdit} />
+        <EditDeviceModal 
+          isOpen={!!editingDevice} 
+          device={editingDevice} 
+          onClose={() => setEditingDevice(null)} 
+          onSave={onEdit} 
+        />
       )}
 
       {deletingDevice && (
