@@ -44,7 +44,7 @@ WiFiManager wm;
 // VARIÁVEIS GLOBAIS
 // ==========================================
 String device_id;
-const char* mqtt_server = "broker.hivemq.com";
+const char* mqtt_server = "10.9.131.193";
 int mqtt_port = 1883;
 
 bool configMode = false;

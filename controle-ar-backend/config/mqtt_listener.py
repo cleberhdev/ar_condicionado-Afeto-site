@@ -11,7 +11,7 @@ django.setup()
 
 from core.models import Device
 
-MQTT_BROKER = "broker.hivemq.com"
+MQTT_BROKER = "mosquitto"
 MQTT_PORT = 1883
 
 # Tópicos

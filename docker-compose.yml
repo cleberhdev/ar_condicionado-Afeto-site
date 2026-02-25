@@ -1,0 +1,49 @@
+services:
+  # Broker MQTT Local
+  mosquitto:
+    image: eclipse-mosquitto:2
+    container_name: mosquitto
+    ports:
+      - "1883:1883"
+    volumes:
+      - ./mosquitto/config:/mosquitto/config
+
+  # Banco de Dados
+  db:
+    image: postgres:15
+    environment:
+      - POSTGRES_DB=ar_condicionado
+      - POSTGRES_USER=user
+      - POSTGRES_PASSWORD=pass
+
+  # Backend Django
+  backend:
+    build: ./controle-ar-backend/config
+    command: python manage.py runserver 0.0.0.0:8000
+    volumes:
+      - ./controle-ar-backend/config:/app
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+      - mosquitto
+    environment:
+      - MQTT_BROKER_HOST=mosquitto
+
+  # Script Ouvinte MQTT
+  mqtt_listener:
+    build: ./controle-ar-backend/config
+    command: python mqtt_listener.py
+    depends_on:
+      - backend
+      - mosquitto
+
+  # Frontend React
+  frontend:
+    build: ./controle-ar-frontend
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./controle-ar-frontend:/app
+    depends_on:
+      - backend
