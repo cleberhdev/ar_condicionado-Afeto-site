@@ -1,10 +1,8 @@
-"use client";
 import React, { useState } from "react";
-import Image from "next/image";
-import log from "@/public/signin.svg";
-import register from "@/public/signup.svg";
-import SignInForm from "./components/SignInForm";
-import SignUpForm from "./components/SignUpForm";
+import log from "../assets/signin.svg";
+import register from "../assets/signup.svg";
+import SignInForm from "../components/SignInForm";
+import SignUpForm from "../components/SignUpForm";
 
 const SlidingLoginSignup = () => {
   const [isSignUpMode, setIsSignUpMode] = useState(false);
@@ -95,10 +93,10 @@ const SlidingLoginSignup = () => {
             }`}
           >
             <h3 className="font-semibold leading-none text-[1.2rem] lg:text-[1.5rem] text-gray-700">
-              New here ?
+              Novo aqui ?
             </h3>
             <p className="text-[0.7rem] lg:text-[0.95rem] px-0 py-2 lg:py-[0.7rem]">
-            Sign up and discover our platform
+              Cadastre-se e descubra nossa plataforma.
             </p>
             <button
               className="bg-transparent w-[110px] h-[35px] text-gray-700 text-[0.7rem] lg:w-[130px] lg:h-[41px] 
@@ -107,11 +105,11 @@ const SlidingLoginSignup = () => {
               id="sign-up-btn"
               onClick={toggleSignUpMode}
             >
-              Sign up
+              Cadastre-se
             </button>
           </div>
 
-          <Image
+          <img
             src={log}
             className={`  max-md:hidden max-lg:translate-y-[-40px] w-[200px] lg:w-full transition-transform 
               duration-[0.9s] lg:duration-[1.1s] ease-[ease-in-out] delay-[0.6s] lg:delay-[0.4s] ${
@@ -138,10 +136,10 @@ const SlidingLoginSignup = () => {
             }`}
           >
             <h3 className="font-semibold leading-none text-[1.2rem] lg:text-[1.5rem] text-gray-700">
-              One of us ?
+              Um de nós?
             </h3>
             <p className=" py-2 text-[0.7rem] lg:text-[0.95rem] px-0  lg:py-[0.7rem]">
-              Sign in to your account to have hastle free experience
+                Faça login na sua conta para ter uma experiência sem complicações.
             </p>
             <button
               className=" text-gray-700 bg-transparent w-[110px] h-[35px]  text-[0.7rem] lg:w-[130px] 
@@ -150,11 +148,11 @@ const SlidingLoginSignup = () => {
               id="sign-in-btn"
               onClick={toggleSignUpMode}
             >
-              Sign in
+              Entre
             </button>
           </div>
 
-          <Image
+          <img
             src={register}
             className={`  max-md:hidden w-[200px] lg:w-full transition-transform duration-[0.9s] 
               lg:duration-[1.1s] ease-[ease-in-out] delay-[0.6s] lg:delay-[0.4s] ${

@@ -5,9 +5,9 @@ const SignInForm = ({ buttonClasses, buttonForGFT }) => {
     <div className="w-full bg-white rounded-lg shadow-xl md:mt-0 sm:max-w-md xl:p-0 border border-gray-100">
       <div className="p-6 space-y-6 md:space-y-7 sm:p-8">
         <h1 className="text-xl font-bold leading-tight tracking-tight text-backgroundColor md:text-2xl text-center">
-          Welcome Back
+          Seja bem-vindo!
           <p className="text-sm font-normal text-gray-500 mt-1">
-            Sign in to your account
+            Faça login na sua conta.
           </p>
         </h1>
 
@@ -29,7 +29,7 @@ const SignInForm = ({ buttonClasses, buttonForGFT }) => {
               name="email"
               id="email"
               className="bg-[#d5f2ec] border border-gray-300 text-gray-900 sm:text-sm rounded-lg focus:ring-brightColor focus:border-brightColor block w-full pl-10 p-3 transition-all duration-200 shadow-sm"
-              placeholder="Email address"
+              placeholder="Email"
               required
             />
           </div>
@@ -54,7 +54,7 @@ const SignInForm = ({ buttonClasses, buttonForGFT }) => {
               name="password"
               id="password"
               className="bg-[#d5f2ec] border border-gray-300 text-gray-900 sm:text-sm rounded-lg focus:ring-brightColor focus:border-brightColor block w-full pl-10 p-3 transition-all duration-200 shadow-sm"
-              placeholder="Password"
+              placeholder="Senha"
               required
             />
           </div>
@@ -74,7 +74,7 @@ const SignInForm = ({ buttonClasses, buttonForGFT }) => {
                   htmlFor="remember"
                   className="text-gray-500  cursor-pointer"
                 >
-                  Remember me
+                    Lembre de mim
                 </label>
               </div>
             </div>
@@ -82,12 +82,12 @@ const SignInForm = ({ buttonClasses, buttonForGFT }) => {
               href="#"
               className="text-sm font-medium text-brightColor hover:underline transition-colors"
             >
-              Forgot password?
+              Esqueceu sua Senha?
             </a>
           </div>
 
           <button type="submit" className={buttonClasses}>
-            Sign in
+            Entrar
           </button>
         </form>
 
@@ -97,7 +97,7 @@ const SignInForm = ({ buttonClasses, buttonForGFT }) => {
           </div>
           <div className="relative flex justify-center text-sm">
             <span className="px-2 bg-white text-gray-500">
-              Or continue with
+              Ou entre com
             </span>
           </div>
         </div>
@@ -145,7 +145,7 @@ const SignInForm = ({ buttonClasses, buttonForGFT }) => {
         </div>
 
         <p className="text-sm text-center text-gray-600 mt-4 border-t border-gray-100 pt-4">
-          If you don&apos;t have an account, Do Sign Up
+         Se você não tem uma conta, cadastre-se.
         </p>
       </div>
     </div>

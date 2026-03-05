@@ -87,7 +87,7 @@ const MainLayout = () => {
 
         {/* NAVEGAÇÃO PRINCIPAL */}
         <nav className="flex-1 space-y-2 overflow-y-auto overflow-x-hidden">
-          <Link to="/" className={getLinkClass('/')} title={!isOpen ? "Dashboard" : ""}>
+          <Link to="/dashboard" className={getLinkClass('/dashboard')} title={!isOpen ? "Dashboard" : ""}>
             <LayoutDashboard size={22} className="min-w-[22px]" />
             {isOpen && <span className="whitespace-nowrap animate-fade-in">Dashboard</span>}
           </Link>
