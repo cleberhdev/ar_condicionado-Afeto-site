@@ -2,6 +2,12 @@
 @tailwind components;
 @tailwind utilities;
 
+@theme {
+  /* Colors */
+  --color-brightColor: #039BAB;
+  --color-backgroundColor: #03C9D7;
+  --color-textColor: #333333;
+}
 /* --- RESET MANUAL DE SEGURANÇA (Nuclear) --- */
 /* Isso garante que margens sumam mesmo se o Tailwind não carregar */
 * {
