@@ -7,4 +7,5 @@ router.register(r'devices', DeviceViewSet)
 
 urlpatterns = [
     path('', include(router.urls)),
+    path('api/v1/auth',  include('accounts.urls'))
 ]
