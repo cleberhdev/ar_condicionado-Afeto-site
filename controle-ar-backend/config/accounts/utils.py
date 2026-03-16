@@ -1,6 +1,7 @@
 import random
 from django.core.mail import EmailMessage
 from .models import User, OneTimePassord
+from django.conf import settings
 
 def generateOtp():
     otp=""
@@ -12,9 +13,14 @@ def send_code_to_email_user(email):
     Subject="One time passcode for Email verification"
     otp_code=generateOtp()
     print(otp_code)
-    user=User.objects.get(email=email)
+    
+    # Aqui o Django traz um Objeto User do banco de dados
+    user=User.objects.get(email=email) 
     current_site="myAuth.com"
-    email_body=f"Olá {user.full_name}, obrigado por se cadastrar no {current_site}, por favor, verifique seu e-mail!"
+    
+    # 👇 CORREÇÃO AQUI: Trocado de user['full_name'] para user.full_name
+    email_body=f"Olá {user.full_name}, obrigado por se cadastrar no {current_site}.\n\nO seu código de verificação é: {otp_code}\n\nPor favor, utilize este código para ativar a sua conta."
+    
     from_email=settings.DEFAULT_FROM_EMAIL
     
     OneTimePassord.objects.create(user=user, code=otp_code)

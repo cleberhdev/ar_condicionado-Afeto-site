@@ -92,7 +92,7 @@ REST_FRAMEWORK = {
 }
 
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=60), # O token expira em 1 hora
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=10), # O token expira em 1 hora
     'REFRESH_TOKEN_LIFETIME': timedelta(days=7),    # O usuário não precisa relogar por 7 dias
     'ROTATE_REFRESH_TOKENS': True,
     'BLACKLIST_AFTER_ROTATION': True,
