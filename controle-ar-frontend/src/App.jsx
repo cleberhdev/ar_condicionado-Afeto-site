@@ -11,7 +11,7 @@ export default function App() {
       <Routes>
         <Route path="login" element={<Login />} />
         {/* Rota Pai: O Layout */}
-        <Route path="/dashboard" element={<MainLayout />}>
+        <Route path="dashboard" element={<MainLayout />}>
           {/* Rotas Filhas: Renderizadas dentro do Outlet do Layout */}
           <Route index element={<Dashboard />} />
           <Route path="placas" element={<Devices />} />
