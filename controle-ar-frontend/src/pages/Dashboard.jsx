@@ -41,7 +41,13 @@ export default function Dashboard() {
       setIsLoading(false);
     }
   };
-
+  const handleDeviceUpdate = (id, newValues) => {
+      setDevices((prevDevices) =>
+        prevDevices.map((device) =>
+          device.id === id ? { ...device, ...newValues } : device
+        )
+      );
+  };
   return (
     <div className="space-y-8 animate-fade-in">
       
@@ -66,7 +72,10 @@ export default function Dashboard() {
           </div>
         </div>
 
-        <DeviceTable data={devices} />
+        <DeviceTable 
+          data={devices} 
+          onStatusUpdate={handleDeviceUpdate}
+        />
       </section>
 
     </div>

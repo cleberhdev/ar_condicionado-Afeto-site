@@ -14,6 +14,9 @@ class DeviceSerializer(serializers.ModelSerializer):
             'last_sent',
             'last_command'
         ]
+        def validate_brand(self, value):
+            if not value:
+                return "generic"
 
 class DeviceCreateSerializer(serializers.ModelSerializer):
     """Serializer específico para criação com campos extras"""

@@ -1,9 +1,10 @@
-# mqtt_listener.py - VERSÃO CORRIGIDA
+# mqtt_listener.py - VERSÃO CORRIGIDA COM WATCHDOG
 import os
 import django
 import json
+import time
 import paho.mqtt.client as mqtt
-from datetime import datetime
+from datetime import datetime, timedelta
 from django.utils import timezone
 
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
@@ -145,7 +146,7 @@ def handle_status_update(data):
 
 
 # ============================================================
-#  CONFIGURAÇÃO DO CLIENTE MQTT
+#  CONFIGURAÇÃO DO CLIENTE MQTT E CÃO DE GUARDA
 # ============================================================
 client = mqtt.Client()
 client.on_connect = on_connect
@@ -153,4 +154,33 @@ client.on_message = on_message
 
 print("\n--- INICIANDO SISTEMA DE ESCUTA MQTT ---\n")
 client.connect(MQTT_BROKER, MQTT_PORT, 60)
-client.loop_forever()
+
+# Inicia o loop em segundo plano para liberar a thread principal
+client.loop_start()
+
+print("⏱️ Iniciando o Cão de Guarda (Watchdog) de conexões...")
+
+try:
+    # Loop infinito que roda a cada 30 segundos
+    while True:
+        time.sleep(30)
+        
+        # Calcula qual era a hora exata 60 segundos atrás
+        limite_tempo = timezone.now() - timedelta(seconds=60)
+        
+        # Puxa do banco todas as placas que estão marcadas como Online, 
+        # MAS que não mandam sinal há mais de 60 segundos
+        placas_fantasmas = Device.objects.filter(
+            is_online=True, 
+            last_seen__lt=limite_tempo
+        )
+        
+        for placa in placas_fantasmas:
+            placa.is_online = False
+            placa.save()
+            print(f"⚠️ ALERTA: Placa {placa.name} ({placa.device_id}) caiu! Marcada como OFFLINE.")
+
+except KeyboardInterrupt:
+    print("\nDesligando o ouvinte MQTT...")
+    client.loop_stop()
+    client.disconnect()
