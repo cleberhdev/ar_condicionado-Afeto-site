@@ -63,57 +63,66 @@ class LoginSerializer(serializers.ModelSerializer):
         }
 
 class PasswordResetRequestSerializer(serializers.Serializer):
-    email=serializers.EmailField(max_length=255)
-
-    class Meta:
-        fields=['email']
+    email = serializers.EmailField(max_length=255)
 
     def validate(self, attrs):
-        email=attrs.get('email')
+        email = attrs.get('email')
+        
         if User.objects.filter(email=email).exists():
-            user=User.objects.get(email=email)
-            uidb64=urlsafe_base64_encode(smart_bytes(user.id))
-            token=PasswordResetTokenGenerator().make_token(user)
-            request=self.context.get('request')
-            site_domain=get_current_site(request).domain
-            relative_link=reverse('password-reset-confirm', kwargs={'uidb64': uidb64, 'token': token})
-            abslink=f"http://{site_domain}{relative_link}"
-            email_body=f"Olá, use o link abaixo para mudar sua senha: \n {abslink}"
-            data={
+            user = User.objects.get(email=email)
+            uidb64 = urlsafe_base64_encode(smart_bytes(user.id))
+            token = PasswordResetTokenGenerator().make_token(user)
+            
+            # 👇 A CORREÇÃO PRINCIPAL ESTÁ AQUI 👇
+            # Coloque o endereço exato onde o seu React está a rodar (geralmente localhost:5173 no Vite)
+            frontend_url = "http://localhost:5173"
+            
+            # Montamos o link apontando para a rota do React em vez do 'reverse' do Django
+            abslink = f"{frontend_url}/reset-password/{uidb64}/{token}"
+            
+            email_body = f"Olá, use o link abaixo para mudar sua senha: \n {abslink}"
+            
+            data = {
                 'email_body': email_body,
                 'email_subject': "Mude sua Senha",
                 'to_email': user.email
             }
             send_normal_email(data)
-        return super().validate(attrs)
+            
+        return attrs
 
 class SetNewPasswordSerializer(serializers.Serializer):
-    password=serializers.CharField(max_length=100, min_length=6, write_only=True)
-    confirm_password=serializers.CharField(max_length=100, min_length=6, write_only=True)
-    uidb64=serializers.CharField(write_only=True)
-    token=serializers.CharField(write_only=True)
+    password = serializers.CharField(max_length=100, min_length=6, write_only=True)
+    confirm_password = serializers.CharField(max_length=100, min_length=6, write_only=True)
+    uidb64 = serializers.CharField(write_only=True)
+    token = serializers.CharField(write_only=True)
 
-    class Meta: 
-        fields= ["password", "confirm_password", "uidb64", "token"]
-    
     def validate(self, attrs):
-        try:
-            token=attrs.get('token')
-            uidb64=attrs.get('uidb64')
-            password=attrs.get('password')
-            confirm_password=attrs.get('confirm_password')
-            user_id=force_str(urlsafe_base64_decode(uidb64))
-            user=User.objects.get(id=user_id)
+        token = attrs.get('token')
+        uidb64 = attrs.get('uidb64')
+        password = attrs.get('password')
+        confirm_password = attrs.get('confirm_password')
 
-            if not PasswordResetTokenGenerator().check_token(user, token):
-                raise AuthenticationFailed("O link de mudança de senha é inválido ou expirou.", 401)
-            if password != confirm_password:
-                raise AuthenticationFailed("Senhão não coicidem!")
-            user.set_password(password)
-            user.save()
-            return attrs
-        except Exception as e:
-             raise AuthenticationFailed("O link de mudança de senha é inválido ou expirou.")
+        # 1. Verifica se as senhas batem certo
+        if password != confirm_password:
+            raise serializers.ValidationError("As senhas não coincidem!")
+
+        # 2. Tenta descodificar o ID do usuário
+        try:
+            user_id = force_str(urlsafe_base64_decode(uidb64))
+            user = User.objects.get(id=user_id)
+        except (ValueError, TypeError, DjangoUnicodeDecodeError, User.DoesNotExist):
+            raise AuthenticationFailed("O link de mudança de senha é inválido ou mal formatado.")
+
+        # 3. Verifica se o token do e-mail é válido
+        if not PasswordResetTokenGenerator().check_token(user, token):
+            raise AuthenticationFailed("O token de segurança é inválido ou já expirou.")
+
+        # 4. Se passou por todas as barreiras, salva a nova senha!
+        user.set_password(password)
+        user.save()
+
+        return attrs
 
 class LogoutUserSerializer(serializers.Serializer):
     refresh_token=serializers.CharField()

@@ -20,14 +20,17 @@ export default function Devices() {
     return () => clearInterval(interval);
   }, []);
 
-  const loadDevices = async () => {
+const loadDevices = async () => {
     setIsLoading(true);
     try {
-      const data = await deviceService.getAll();
-      const registered = data.filter(d => d.is_registered !== false);
-      const unregistered = data.filter(d => d.is_registered === false && d.is_online);
-      setDevices(registered || []);
-      setUnregisteredDevices(unregistered || []);
+      // 1. Busca as placas do usuário logado
+      const userDevices = await deviceService.getAll();
+      setDevices(userDevices || []);
+
+      // 2. Busca as placas detectadas na rede sem dono (A caixinha amarela!)
+      const orphans = await deviceService.getUnregistered();
+      setUnregisteredDevices(orphans || []);
+
     } catch (error) {
       console.error("Erro ao carregar:", error);
     } finally {
@@ -37,9 +40,9 @@ export default function Devices() {
 
   const checkUnregisteredDevices = async () => {
     try {
-      const data = await deviceService.getAll();
-      const unregistered = data.filter(d => d.is_registered === false && d.is_online);
-      setUnregisteredDevices(unregistered);
+      // O intervalo de 10s só precisa buscar as placas órfãs
+      const orphans = await deviceService.getUnregistered();
+      setUnregisteredDevices(orphans || []);
     } catch (error) {
       console.error("Erro ao verificar dispositivos:", error);
     }

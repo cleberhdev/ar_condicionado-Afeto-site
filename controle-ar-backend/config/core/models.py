@@ -1,5 +1,6 @@
 from django.db import models
 from django.utils import timezone
+from django.conf import settings
 
 class Device(models.Model):
     BRAND_CHOICES = [
@@ -23,7 +24,14 @@ class Device(models.Model):
         ('dry', 'Desumidificar'),
         ('auto', 'Automático'),
     ]
-    
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, 
+        on_delete=models.CASCADE, 
+        related_name='devices',
+        null=True,  # Deixamos null=True para não dar erro com os aparelhos que já existem no banco
+        blank=True
+    )
+
     # --- Identificação ---
     device_id = models.CharField(max_length=50, unique=True)
     name = models.CharField(max_length=100)
@@ -37,7 +45,7 @@ class Device(models.Model):
 
     # --- Estado atual (controlado pelo backend/MQTT) ---
     is_online = models.BooleanField(default=False)
-    is_registered = models.BooleanField(default=True)  
+    is_registered = models.BooleanField(default=False)  
     power = models.BooleanField(default=False)
     temperature = models.IntegerField(default=24)
     mode = models.CharField(max_length=10, choices=MODE_CHOICES, default='cool')

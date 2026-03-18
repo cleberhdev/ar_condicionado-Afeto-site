@@ -40,20 +40,17 @@ class DeviceCreateSerializer(serializers.ModelSerializer):
         return value
 
 class CommandSerializer(serializers.Serializer):
-    """Serializer para comandos enviados para ESP32"""
     power = serializers.BooleanField(required=True)
-    temperature = serializers.IntegerField(
-        min_value=16, 
-        max_value=30, 
-        required=True,
-        source='temp'  # Aceita 'temp' do frontend
-    )
+    # Mudamos para aceitar 'temp' de forma simples
+    temp = serializers.IntegerField(min_value=16, max_value=30, required=False)
+    temperature = serializers.IntegerField(min_value=16, max_value=30, required=False)
     mode = serializers.ChoiceField(
         choices=['cool', 'heat', 'fan', 'dry', 'auto'], 
         required=True
     )
-    
+
     def validate(self, data):
-        """Validação customizada"""
-        # Pode adicionar validações extras aqui
+        # Lógica para garantir que temos uma temperatura, independente do nome da chave
+        if 'temp' not in data and 'temperature' not in data:
+            raise serializers.ValidationError("É necessário informar a temperatura (temp ou temperature).")
         return data

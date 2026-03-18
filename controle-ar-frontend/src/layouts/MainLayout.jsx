@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Outlet, Link, useLocation } from 'react-router-dom';
+import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
+import { authService } from '../services/api'; // <-- IMPORTANTE: Importa o serviço de autenticação
 import { 
   LayoutDashboard, 
   Server, 
@@ -11,14 +12,20 @@ import {
 
 const MainLayout = () => {
   const location = useLocation();
-  const [isOpen, setIsOpen] = useState(true);
+  const navigate = useNavigate(); // <-- IMPORTANTE: Permite redirecionar páginas
   
-  // Estado para controlar o modo global (afeta o background)
+  const [isOpen, setIsOpen] = useState(true);
   const [globalMode, setGlobalMode] = useState('off');
 
-  // Função para estilizar os links
+  // --- FUNÇÃO DE LOGOUT ---
+  const handleLogout = async () => {
+    await authService.logout(); // Apaga o token do navegador (e avisa o backend se configurado)
+    navigate('/login'); // Expulsa o usuário para a tela de login
+  };
+
   const getLinkClass = (path) => {
-    const isActive = location.pathname === path;
+    // Agora aceita tanto a rota exata quanto rotas filhas (ex: caso crie /devices/1)
+    const isActive = location.pathname.includes(path);
     
     return `
       flex items-center gap-3 px-3 py-3 rounded-lg cursor-pointer transition-all duration-200
@@ -30,23 +37,13 @@ const MainLayout = () => {
     `;
   };
 
-  // --- LÓGICA DE CORES ATUALIZADA ---
   const getBackgroundClass = () => {
     switch (globalMode) {
-      case 'cool': // Frio: Azul
-        return 'bg-gradient-to-br from-blue-50 via-blue-50 to-cyan-100';
-      
-      case 'heat': // Quente: Laranja/Vermelho
-        return 'bg-gradient-to-br from-orange-50 via-orange-50 to-red-100';
-      
-      case 'fan': // Ventilar: Verde (Natureza/Fresco)
-        return 'bg-gradient-to-br from-emerald-50 via-green-50 to-teal-100';
-      
-      case 'dry': // Desumidificar: Cinza (Neutro/Seco)
-        return 'bg-gradient-to-br from-gray-100 via-slate-100 to-zinc-200';
-      
-      default: // Off: Padrão
-        return 'bg-slate-50';
+      case 'cool': return 'bg-gradient-to-br from-blue-50 via-blue-50 to-cyan-100';
+      case 'heat': return 'bg-gradient-to-br from-orange-50 via-orange-50 to-red-100';
+      case 'fan': return 'bg-gradient-to-br from-emerald-50 via-green-50 to-teal-100';
+      case 'dry': return 'bg-gradient-to-br from-gray-100 via-slate-100 to-zinc-200';
+      default: return 'bg-slate-50';
     }
   };
 
@@ -60,10 +57,7 @@ const MainLayout = () => {
           ${isOpen ? "w-72 p-4" : "w-20 p-2"} 
         `}
       >
-        
-        {/* CABEÇALHO DA SIDEBAR */}
         <div className={`flex items-center h-16 mb-6 ${isOpen ? "justify-between px-2" : "justify-center"}`}>
-          
           {isOpen && (
             <div className="flex items-center gap-3 overflow-hidden animate-fade-in">
               <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center font-bold text-white shadow-sm">
@@ -92,15 +86,17 @@ const MainLayout = () => {
             {isOpen && <span className="whitespace-nowrap animate-fade-in">Dashboard</span>}
           </Link>
 
-          <Link to="/placas" className={getLinkClass('/placas')} title={!isOpen ? "Placas ESP32" : ""}>
+          {/* 👇 ROTA ATUALIZADA PARA /devices 👇 */}
+          <Link to="/devices" className={getLinkClass('/devices')} title={!isOpen ? "Dispositivos" : ""}>
             <Server size={22} className="min-w-[22px]" />
-            {isOpen && <span className="whitespace-nowrap animate-fade-in">Placas ESP32</span>}
+            {isOpen && <span className="whitespace-nowrap animate-fade-in">Dispositivos</span>}
           </Link>
         </nav>
 
         {/* RODAPÉ */}
         <div className="mt-auto border-t border-slate-800 pt-4">
           <button 
+            onClick={handleLogout} // <-- IMPORTANTE: Chama a função de Logout
             className={`
               flex items-center gap-3 px-3 py-3 w-full rounded-lg text-red-400 hover:bg-slate-800 hover:text-red-300 transition-colors
               ${!isOpen ? "justify-center" : ""}
@@ -114,10 +110,8 @@ const MainLayout = () => {
       </aside>
 
       {/* --- ÁREA DE CONTEÚDO --- */}
-      {/* O Background muda aqui baseado no getBackgroundClass() */}
       <main className={`flex-1 overflow-auto relative transition-colors duration-700 ease-in-out ${getBackgroundClass()}`}>
         
-        {/* Cabeçalho Mobile */}
         <header className="bg-white/80 backdrop-blur-md p-4 shadow-sm flex items-center justify-between md:hidden sticky top-0 z-30">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">

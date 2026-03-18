@@ -53,22 +53,26 @@ const RemoteControlModal = ({ isOpen, onClose, device, onUpdate }) => {
     }
   };
 
-  const handlePower = () => {
+const handlePower = () => {
     const newState = !power;
     setPower(newState);
-    sendCommand(newState, temp, mode);
+    // Usamos newState para garantir o valor atualizado, 
+    // e temp/mode que são os atuais do estado.
+    sendCommand(newState, temp, mode); 
   };
 
   const handleTempChange = (increment) => {
     if (!power) return;
     const newTemp = Math.min(Math.max(temp + increment, MIN_TEMP), MAX_TEMP);
     setTemp(newTemp);
+    // Passamos newTemp explicitamente
     sendCommand(power, newTemp, mode);
   };
 
   const handleModeChange = (newModeValue) => {
     if (!power) return;
     setMode(newModeValue);
+    // Passamos newModeValue explicitamente
     sendCommand(power, temp, newModeValue);
   };
 
