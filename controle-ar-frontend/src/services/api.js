@@ -17,6 +17,8 @@ api.interceptors.request.use(
       "auth/login/",
       "auth/register/",
       "auth/password-reset/",
+      "auth/verify-email/",      // <-- ADICIONADO
+      "auth/set-new-password/",  // <-- ADICIONADO
     ];
     const isPublicRoute = publicRoutes.some((route) =>
       config.url?.includes(route),
