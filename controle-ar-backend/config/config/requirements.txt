@@ -1,0 +1,10 @@
+Django>=5.0
+djangorestframework
+django-cors-headers
+paho-mqtt
+gunicorn
+psycopg2-binary
+dj-database-url
+django-environ
+whitenoise
+djangorestframework-simplejwt
