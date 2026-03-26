@@ -7,23 +7,36 @@ const api = axios.create({
 
 // 👇 O INTERCETOR MÁGICO 👇
 // Antes de qualquer requisição sair do React, ele roda este código:
-api.interceptors.request.use((config) => {
-  const token = localStorage.getItem("access_token");
-  
-  // Se existir um token guardado, adiciona ele no cabeçalho
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
-}, (error) => {
-  return Promise.reject(error);
-});
+api.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem("access_token");
+
+    // Lista de rotas públicas que não devem enviar o token
+    const publicRoutes = [
+      "auth/login/",
+      "auth/register/",
+      "auth/password-reset/",
+    ];
+    const isPublicRoute = publicRoutes.some((route) =>
+      config.url?.includes(route),
+    );
+
+    // Se existir um token guardado E a rota não for pública, adiciona ele no cabeçalho
+    if (token && !isPublicRoute) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
+  },
+);
 
 // --- SERVIÇO DE AUTENTICAÇÃO ---
 export const authService = {
   login: async (email, password) => {
     const res = await api.post("auth/login/", { email, password });
-    
+
     // Se o backend devolver os tokens, guardamos eles no navegador!
     if (res.data.access_token) {
       localStorage.setItem("access_token", res.data.access_token);
@@ -31,7 +44,7 @@ export const authService = {
     }
     return res.data;
   },
-  
+
   register: async (userData) => {
     const res = await api.post("auth/register/", userData);
     return res.data;
@@ -43,7 +56,7 @@ export const authService = {
     const res = await api.post("auth/verify-email/", { otp });
     return res.data;
   },
-  
+
   logout: async () => {
     try {
       // Opcional: Avisa o backend para invalidar (blacklist) o refresh_token
@@ -67,7 +80,7 @@ export const authService = {
     // data deve conter: { password, confirm_password, uidb64, token }
     const res = await api.patch("auth/set-new-password/", data);
     return res.data;
-  }
+  },
 };
 
 // --- SERVIÇO DE DISPOSITIVOS ---
@@ -120,7 +133,7 @@ export const deviceService = {
   getUnregistered: async () => {
     const res = await api.get("devices/unregistered/");
     return res.data;
-  }
+  },
 };
 
 export default api;
