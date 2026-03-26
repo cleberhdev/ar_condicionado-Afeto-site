@@ -2,7 +2,8 @@ import axios from "axios";
 
 // Cria a instância base do Axios
 const api = axios.create({
-  baseURL: "http://127.0.0.1:8000/api/",
+  // Tenta ler a URL do Vercel, se não achar, usa o localhost para testes
+  baseURL: import.meta.env.VITE_API_URL || "http://127.0.0.1:8000/api/",
 });
 
 // 👇 O INTERCETOR MÁGICO 👇
